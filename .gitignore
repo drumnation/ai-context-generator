@@ -1,0 +1,10 @@
+out
+dist
+node_modules
+.vscode-test/
+*.vsix
+
+
+
+.nx/cache
+.nx/workspace-data

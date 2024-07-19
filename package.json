@@ -1,0 +1,76 @@
+{
+  "name": "ai-pack",
+  "displayName": "ai-pack",
+  "description": "turn a whole folder of files into a single markdown file for ai context",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-pack.generateMarkdown",
+        "title": "AI-Pack: Generate Markdown"
+      },
+      {
+        "command": "ai-pack.generateMarkdownRoot",
+        "title": "AI-Pack: Generate Markdown at Root"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "explorerResourceIsFolder",
+          "command": "ai-pack.generateMarkdown",
+          "group": "navigation"
+        },
+        {
+          "command": "ai-pack.generateMarkdownRoot",
+          "when": "workspaceHasRootFolder"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "clean": "rimraf out",
+    "prebuild": "npm run clean",
+    "build": "tsc -p ./ && vite build",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run build",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@nx/eslint": "19.5.1",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "20.x",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.91.0",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.11.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.4.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "npm-run-all": "^4.1.5",
+    "nx": "19.5.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4"
+  },
+  "nx": {},
+  "packageManager": "pnpm@8.15.3+sha1.64838798f519c18029c1e8a1310e16101fc2eda0",
+  "dependencies": {
+    "@vscode/webview-ui-toolkit": "^1.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "targetDefaults": {
+    "check-types": {
+      "cache": true
+    },
+    "lint": {
+      "cache": true
+    },
+    "test": {
+      "cache": true
+    }
+  },
+  "defaultBase": "master",
+  "plugins": [
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "eslint:lint"
+      }
+    }
+  ],
+  "nxCloudAccessToken": "ZWJlYTJhYmItZGI5OS00ZDU1LThiOGItZjdhZGZlYTNlNjAwfHJlYWQtd3JpdGU="
+}

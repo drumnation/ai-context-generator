@@ -1,0 +1,74 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#5A0E0E",
+    "titleBar.activeBackground": "#7F1313",
+    "titleBar.activeForeground": "#FFFFFF",
+    "editor.background": "#000000",
+    "editor.foreground": "#E1E1E1",
+    "sideBar.background": "#4D0000",
+    "statusBar.background": "#7F1313",
+    "statusBar.foreground": "#FFFFFF",
+    "tab.activeBackground": "#7F1313",
+    "tab.activeForeground": "#FFFFFF",
+    "tab.inactiveBackground": "#5A0E0E",
+    "tab.inactiveForeground": "#E1E1E1"
+  },
+  "files.exclude": {
+    "out": false, // set this to true to hide the "out" folder with the compiled JS files
+    "dist": false // set this to true to hide the "dist" folder with the compiled JS files
+  },
+  "editor.formatOnSave": false,
+  "[javascript]": {
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "always"
+    }
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
+    "editor.formatOnSave": true,
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "always"
+  },
+  "editor.detectIndentation": true,
+  "dotenv.enableAutocloaking": false,
+  "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
+  "editor.formatOnType": false,
+  "editor.formatOnPaste": true,
+  "editor.formatOnSaveMode": "file",
+  "files.autoSave": "onFocusChange",
+  "vs-code-prettier-eslint.prettierLast": false,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "editor.indentSize": "tabSize",
+  "editor.tabSize": 2,
+  "search.exclude": {
+    "out": true, // set this to false to include "out" folder in search results
+    "dist": true // set this to false to include "dist" folder in search results
+  },
+  // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
+  "typescript.tsc.autoDetect": "off",
+}

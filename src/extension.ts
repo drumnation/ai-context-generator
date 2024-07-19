@@ -65,7 +65,11 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
         let rootFileTreeCache = '';
         let rootCombinedContentCache = '';
 
-        let initialLoad = true;  // Add this line to declare the variable
+        let initialLoad = true;
+
+        const timeoutId = setTimeout(() => {
+            panel.webview.postMessage({ command: 'showError' });
+        }, 30000); // 30 seconds
 
         async function renderContent() {
             console.log('Entering renderContent function');
@@ -94,15 +98,21 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
                 const combinedContent = showRootCombined ? rootCombinedContentCache + '\n\n' + combinedContentCache : combinedContentCache;
 
                 console.log('Sending content to webview');
-                panel.webview.postMessage({ 
-                    command: 'updateContent',
-                    fileTree: fileTree,
-                    combinedContent: combinedContent,
-                    isRoot: isRoot
-                });
+                clearTimeout(timeoutId);
+                if (!fileTree && !combinedContent) {
+                    panel.webview.postMessage({ command: 'showError' });
+                } else {
+                    panel.webview.postMessage({
+                        command: 'updateContent',
+                        fileTree: fileTree,
+                        combinedContent: combinedContent,
+                        isRoot: isRoot
+                    });
+                }
             } catch (error) {
                 console.error('Error in renderContent:', error);
                 vscode.window.showErrorMessage(`Error generating AI context: ${error instanceof Error ? error.message : String(error)}`);
+                clearTimeout(timeoutId);
             }
         }
 
@@ -172,6 +182,8 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
                 border: 1px solid var(--vscode-editor-foreground); 
                 padding: 10px; 
                 margin-bottom: 10px; 
+                position: relative;
+                min-height: 100px; /* Ensure there's space for the spinner */
             }
             .controls {
                 display: flex;
@@ -201,6 +213,30 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
                 gap: 10px;
                 margin-bottom: 10px;
             }
+            .error-message {
+                color: var(--vscode-errorForeground);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px;
+                border: 1px solid var(--vscode-errorForeground);
+                border-radius: 3px;
+            }
+            .error-icon {
+                font-size: 24px;
+            }
+            .spinner-container {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .spinner {
+                display: block;
+            }
         </style>
     </head>
     <body>
@@ -217,7 +253,10 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
             `}
         </div>
 
-        <div class="theme-box">
+        <div class="theme-box" id="fileTreeSection">
+            <div class="spinner-container spinner" id="spinnerFileTree">
+                <vscode-progress-ring></vscode-progress-ring>
+            </div>
             <div class="section-header">
                 <div class="header-controls">
                     <vscode-button id="copyFileTree">
@@ -235,7 +274,10 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
             </div>
         </div>
 
-        <div class="theme-box">
+        <div class="theme-box" id="combinedContentSection">
+            <div class="spinner-container spinner" id="spinnerCombinedContent">
+                <vscode-progress-ring></vscode-progress-ring>
+            </div>
             <div class="section-header">
                 <div class="header-controls">
                     <vscode-button id="copyCombinedContent">
@@ -253,6 +295,11 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
             </div>
         </div>
 
+        <div class="error-message" id="errorMessage" style="display: none;">
+            <span class="codicon codicon-error error-icon"></span>
+            <span>There was an error generating the content. Please try again.</span>
+        </div>
+
         <script>
             const vscode = acquireVsCodeApi();
 
@@ -261,12 +308,21 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
                 console.log('Received message:', message);
                 switch (message.command) {
                     case 'updateContent':
-                        console.log('Updating file tree content');
                         document.getElementById('fileTree').textContent = message.fileTree;
-                        console.log('File tree content updated');
-                        console.log('Updating combined content');
                         document.getElementById('combinedContent').textContent = message.combinedContent;
-                        console.log('Combined content updated');
+                        document.getElementById('fileTreeSection').style.display = 'block';
+                        document.getElementById('combinedContentSection').style.display = 'block';
+                        document.getElementById('errorMessage').style.display = 'none';
+                        document.getElementById('spinnerFileTree').style.display = 'none';
+                        document.getElementById('spinnerCombinedContent').style.display = 'none';
+                        break;
+                    case 'showError':
+                        console.log('Showing error message');
+                        document.getElementById('fileTreeSection').style.display = 'none';
+                        document.getElementById('combinedContentSection').style.display = 'none';
+                        document.getElementById('errorMessage').style.display = 'flex';
+                        document.getElementById('spinnerFileTree').style.display = 'none';
+                        document.getElementById('spinnerCombinedContent').style.display = 'none';
                         break;
                 }
             });
@@ -324,7 +380,6 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
     </html>`;
 }
 
-
 async function generateFileTree(directoryPath: string, rootPath: string, includeDotFolders: boolean): Promise<string> {
     const tree: string[] = [path.basename(directoryPath)];
 
@@ -363,7 +418,7 @@ async function combineFiles(rootPath: string, directoryPath: string, includeDotF
             } else if (file.isFile() && !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) && file.name !== 'package-lock.json') {
                 const relativePath = path.relative(rootPath, fullPath);
                 const content = await fs.readFile(fullPath, 'utf-8');
-                const fileExtension = path.extname(fullPath).substring(1); // Extract extension and remove the dot
+                const fileExtension = path.extname(fullPath).substring(1);
                 combinedContent += `\n\n# ./${relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
             }
         }

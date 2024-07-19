@@ -2,7 +2,6 @@
 
 <img src="images/icon.png" alt="Extension Icon" width="100" height="100">
 
-
 AI Context Generator is a Visual Studio Code extension designed to generate context summaries for directories and root folders, facilitating better AI-powered insights.
 
 ## Features
@@ -40,6 +39,18 @@ After generating the context, you can copy the content directly from the webview
 - Click the `Copy` button above the `Tree` or `Files` sections to copy individual content.
 - Use the `Copy All` button to copy the entire generated context.
 
+## Important Note
+
+This extension automatically ignores certain folders to prevent cluttering your file tree and file context with external code that is not part of your actual project. Specifically, it will ignore:
+
+- Folders starting with a period (e.g., `.expo`, `.git`)
+- `node_modules` directory
+- `dist` directory
+- Android-specific directories: `build`, `app/build`, `gradle`, `.gradle`, `.idea`, `android/.gradle`
+- Maven-related directories: `.m2`, `.mvn`
+
+This is to ensure that the generated context is relevant and focused on your project's core files.
+
 ## Contributing
 
 Contributions are welcome! Here are some ways you can contribute:
@@ -47,15 +58,5 @@ Contributions are welcome! Here are some ways you can contribute:
 - **Report Bugs:** If you encounter any issues, please report them on the [Issue Tracker](https://github.com/drumnation/ai-context-generator/issues).
 - **Feature Requests:** If you have ideas for new features, feel free to submit them on the [Issue Tracker](https://github.com/drumnation/ai-context-generator/issues).
 - **Code Contributions:** Fork the repository, make your changes, and submit a pull request.
-
-## Development
-
-To set up the development environment:
-
-1. Clone the repository:
-
-   ```sh
-   git clone https://github.com/drumnation/ai-context-generator.git
-   cd ai-context-generator
 
 <a href="https://www.flaticon.com/free-icons/generative" title="generative icons">Generative icons created by Parzival’ 1997 - Flaticon</a>

@@ -69,7 +69,7 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
 
         const timeoutId = setTimeout(() => {
             panel.webview.postMessage({ command: 'showError' });
-        }, 30000); // 30 seconds
+        }, 30000);
 
         async function renderContent() {
             console.log('Entering renderContent function');
@@ -391,7 +391,9 @@ async function generateFileTree(directoryPath: string, rootPath: string, include
             const isLast = i === files.length - 1;
             const prefix = isLast ? '└── ' : '├── ';
 
-            if (file.isDirectory() && (includeDotFolders || (!file.name.startsWith('.') && !['node_modules', 'dist'].includes(file.name)))) {
+            if (file.isDirectory() && (includeDotFolders || (!file.name.startsWith('.') && ![
+                'node_modules', 'dist', 'build', 'app/build', 'gradle', '.gradle', '.idea', 'android/.gradle', '.m2', '.mvn'
+            ].includes(file.name)))) {
                 tree.push(`${indent}${prefix}${file.name}`);
                 await traverse(path.join(dir, file.name), indent + (isLast ? '    ' : '│   '));
             } else if (file.isFile() && !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) && file.name !== 'package-lock.json') {

@@ -2,7 +2,7 @@
   "name": "ai-context-generator",
   "displayName": "AI Context Generator",
   "description": "Generate context summaries for directories and root folders with AI.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "drumnation",
   "icon": "images/icon.png",
   "repository": {
@@ -66,7 +66,7 @@
     "@nx/eslint": "19.5.1",
     "@types/mocha": "^10.0.7",
     "@types/node": "20.x",
-    "@types/vscode": "^1.91.0",
+    "@types/vscode": "^1.89.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
     "@vitejs/plugin-react": "^4.3.1",

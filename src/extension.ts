@@ -163,8 +163,8 @@ function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRo
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <script type="module" src="${toolkitUri}"></script>
-        <link href="${codiconsUri}" rel="stylesheet" />
+        <script type="module" src="https://unpkg.com/@vscode/webview-ui-toolkit@1.4.0/dist/toolkit.js"></script>
+        <link href="https://unpkg.com/@vscode/codicons@0.0.36/dist/codicon.css" rel="stylesheet" />
         <title>AI-Pack Webview</title>
         <style>
             body { 

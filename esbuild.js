@@ -1,4 +1,5 @@
 const esbuild = require("esbuild");
+const path = require('path');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -42,8 +43,18 @@ async function main() {
 		await ctx.watch();
 	} else {
 		await ctx.rebuild();
+		await copyDependencies();
 		await ctx.dispose();
 	}
+}
+
+async function copyDependencies() {
+	const cpy = await import('cpy');
+	await cpy.default([
+		'node_modules/@vscode/codicons/dist/**/*',
+		'node_modules/@vscode/webview-ui-toolkit/dist/**/*'
+	], path.join('dist', 'node_modules', '@vscode'));
+	console.log('Dependencies copied successfully');
 }
 
 main().catch(e => {

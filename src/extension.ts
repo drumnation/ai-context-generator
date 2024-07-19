@@ -39,21 +39,23 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
     try {
         const panel = vscode.window.createWebviewPanel(
             'markdownPreview',
-            `Generated Markdown for ${path.basename(directoryPath)}`,
+            `AI-Context for ./${path.relative(rootPath, directoryPath)}`,
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out'))]
+                localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'node_modules', '@vscode')), vscode.Uri.file(path.join(context.extensionPath, 'out'))]
             }
         );
         console.log('Webview panel created');
 
-        const webviewPath = vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'));
-        const mainScriptPathOnDisk = vscode.Uri.file(path.join(webviewPath.fsPath, 'main.js'));
-        const mainScriptUri = panel.webview.asWebviewUri(mainScriptPathOnDisk);
+        const toolkitUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@vscode', 'webview-ui-toolkit', 'dist', 'toolkit.js'));
+        const codiconsUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'));
 
-        panel.webview.html = getWebviewContent(mainScriptUri);
-        console.log('Webview HTML set:', panel.webview.html);
+        console.log(`Toolkit URI: ${toolkitUri}`);
+        console.log(`Codicons URI: ${codiconsUri}`);
+
+        panel.webview.html = getWebviewContent(toolkitUri, codiconsUri, isRoot);
+        console.log('Webview HTML set');
 
         let showRootFiletree = false;
         let showRootCombined = false;
@@ -63,54 +65,44 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
         let rootFileTreeCache = '';
         let rootCombinedContentCache = '';
 
+        let initialLoad = true;  // Add this line to declare the variable
+
         async function renderContent() {
             console.log('Entering renderContent function');
             try {
-                const progressOptions = {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Generating Markdown",
-                    cancellable: false
-                };
+                if (!fileTreeCache) {
+                    console.log('Generating file tree');
+                    fileTreeCache = await generateFileTree(directoryPath, rootPath, includeDotFolders);
+                }
 
-                await vscode.window.withProgress(progressOptions, async (progress) => {
-                    progress.report({ increment: 0 });
+                if (!combinedContentCache) {
+                    console.log('Combining files');
+                    combinedContentCache = await combineFiles(rootPath, directoryPath, includeDotFolders);
+                }
 
-                    if (!fileTreeCache) {
-                        console.log('Generating file tree');
-                        fileTreeCache = await generateFileTree(directoryPath, rootPath, includeDotFolders);
-                    }
+                if (!rootFileTreeCache && !isRoot) {
+                    console.log('Generating root file tree');
+                    rootFileTreeCache = await generateFileTree(rootPath, rootPath, includeDotFolders);
+                }
 
-                    if (!combinedContentCache) {
-                        console.log('Combining files');
-                        combinedContentCache = await combineFiles(rootPath, directoryPath, includeDotFolders);
-                    }
+                if (!rootCombinedContentCache && !isRoot) {
+                    console.log('Combining root files');
+                    rootCombinedContentCache = await combineFiles(rootPath, rootPath, includeDotFolders);
+                }
 
-                    if (!rootFileTreeCache && !isRoot) {
-                        console.log('Generating root file tree');
-                        rootFileTreeCache = await generateFileTree(rootPath, rootPath, includeDotFolders);
-                    }
+                const fileTree = showRootFiletree ? rootFileTreeCache + '\n\n' + fileTreeCache : fileTreeCache;
+                const combinedContent = showRootCombined ? rootCombinedContentCache + '\n\n' + combinedContentCache : combinedContentCache;
 
-                    if (!rootCombinedContentCache && !isRoot) {
-                        console.log('Combining root files');
-                        rootCombinedContentCache = await combineFiles(rootPath, rootPath, includeDotFolders);
-                    }
-
-                    progress.report({ increment: 100, message: "Rendering content..." });
-
-                    const fileTree = showRootFiletree ? rootFileTreeCache + '\n\n' + fileTreeCache : fileTreeCache;
-                    const combinedContent = showRootCombined ? rootCombinedContentCache + '\n\n' + combinedContentCache : combinedContentCache;
-
-                    console.log('Sending content to webview');
-                    panel.webview.postMessage({ 
-                        command: 'updateContent',
-                        fileTree: fileTree,
-                        combinedContent: combinedContent,
-                        isRoot: isRoot
-                    });
+                console.log('Sending content to webview');
+                panel.webview.postMessage({ 
+                    command: 'updateContent',
+                    fileTree: fileTree,
+                    combinedContent: combinedContent,
+                    isRoot: isRoot
                 });
             } catch (error) {
                 console.error('Error in renderContent:', error);
-                vscode.window.showErrorMessage(`Error generating markdown: ${error instanceof Error ? error.message : String(error)}`);
+                vscode.window.showErrorMessage(`Error generating AI context: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
 
@@ -132,7 +124,12 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
                         break;
                     case 'webviewLoaded':
                         console.log('Webview has loaded');
-                        vscode.window.showInformationMessage('AI-Pack webview loaded successfully');
+                        if (!initialLoad) {
+                            initialLoad = true;
+                            vscode.window.showInformationMessage('AI-Pack webview loaded successfully');
+                        }
+                        break;
+                    case 'renderContent':
                         renderContent();
                         break;
                 }
@@ -146,34 +143,187 @@ async function generateMarkdown(rootPath: string, directoryPath: string, context
 
     } catch (error) {
         console.error('Error in generateMarkdown:', error);
-        vscode.window.showErrorMessage(`Error generating markdown: ${error instanceof Error ? error.message : String(error)}`);
+        vscode.window.showErrorMessage(`Error generating AI context: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
-function getWebviewContent(mainScriptUri: vscode.Uri) {
+function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRoot: boolean) {
     return `<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${mainScriptUri.toString()} 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src vscode-resource:;">
+        <script type="module" src="${toolkitUri}"></script>
+        <link href="${codiconsUri}" rel="stylesheet" />
         <title>AI-Pack Webview</title>
+        <style>
+            body { 
+                padding: 20px; 
+                --vscode-button-icon-size: 16px;
+            }
+            pre { 
+                white-space: pre-wrap; 
+                word-break: break-all; 
+                background-color: var(--vscode-textCodeBlock-background);
+                padding: 10px;
+                border-radius: 3px;
+            }
+            .theme-box { 
+                border: 1px solid var(--vscode-editor-foreground); 
+                padding: 10px; 
+                margin-bottom: 10px; 
+            }
+            .controls {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                align-items: center;
+            }
+            .section-header {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                margin-bottom: 10px;
+            }
+            .title {
+                display: flex;
+                align-items: center;
+            }
+            h2 {
+                margin: 5px 0; /* Reduced margin for headings */
+            }
+            .content-box {
+                margin-top: 10px;
+            }
+            .header-controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 10px;
+            }
+        </style>
     </head>
     <body>
-        <h1>AI-Pack Webview</h1>
-        <p>This is a basic HTML test. If you can see this, the webview is working.</p>
-        <div id="root"></div>
-        <script type="module" src="${mainScriptUri}"></script>
+        <div class="theme-box controls">
+            <vscode-button id="copyAll" appearance="primary">
+                <span slot="start" class="codicon codicon-copy"></span>
+                Copy All
+            </vscode-button>
+            ${isRoot ? '' : `
+            <vscode-radio-group orientation="horizontal">
+                <vscode-radio value="directory" checked>Directory Mode</vscode-radio>
+                <vscode-radio value="root">Root Mode</vscode-radio>
+            </vscode-radio-group>
+            `}
+        </div>
+
+        <div class="theme-box">
+            <div class="section-header">
+                <div class="header-controls">
+                    <vscode-button id="copyFileTree">
+                        <span slot="start" class="codicon codicon-copy"></span>
+                        Copy
+                    </vscode-button>
+                    ${isRoot ? '' : '<vscode-checkbox id="toggleRootFiletree">Toggle Root</vscode-checkbox>'}
+                </div>
+                <div class="title">
+                    <h2>Tree</h2>
+                </div>
+            </div>
+            <div class="content-box">
+                <pre id="fileTree"></pre>
+            </div>
+        </div>
+
+        <div class="theme-box">
+            <div class="section-header">
+                <div class="header-controls">
+                    <vscode-button id="copyCombinedContent">
+                        <span slot="start" class="codicon codicon-copy"></span>
+                        Copy
+                    </vscode-button>
+                    ${isRoot ? '' : '<vscode-checkbox id="toggleRootCombined">Toggle Root</vscode-checkbox>'}
+                </div>
+                <div class="title">
+                    <h2>Files</h2>
+                </div>
+            </div>
+            <div class="content-box">
+                <pre id="combinedContent"></pre>
+            </div>
+        </div>
+
         <script>
-            console.log('Webview HTML loaded');
-            console.log('React app script src:', '${mainScriptUri}');
-            window.onerror = function(message, source, lineno, colno, error) {
-                console.error('Error in webview:', message, 'at', source, lineno, colno, error);
-            };
+            const vscode = acquireVsCodeApi();
+
+            window.addEventListener('message', event => {
+                const message = event.data;
+                console.log('Received message:', message);
+                switch (message.command) {
+                    case 'updateContent':
+                        console.log('Updating file tree content');
+                        document.getElementById('fileTree').textContent = message.fileTree;
+                        console.log('File tree content updated');
+                        console.log('Updating combined content');
+                        document.getElementById('combinedContent').textContent = message.combinedContent;
+                        console.log('Combined content updated');
+                        break;
+                }
+            });
+
+            document.getElementById('copyFileTree').addEventListener('click', () => {
+                vscode.postMessage({ command: 'copyToClipboard', content: document.getElementById('fileTree').textContent });
+            });
+
+            document.getElementById('copyCombinedContent').addEventListener('click', () => {
+                vscode.postMessage({ command: 'copyToClipboard', content: document.getElementById('combinedContent').textContent });
+            });
+
+            const copyAllButton = document.getElementById('copyAll');
+            if (copyAllButton) {
+                copyAllButton.addEventListener('click', () => {
+                    const allContent = document.getElementById('fileTree').textContent + '\\n\\n' + document.getElementById('combinedContent').textContent;
+                    vscode.postMessage({ command: 'copyToClipboard', content: allContent });
+                });
+            }
+
+            const toggleRootFiletree = document.getElementById('toggleRootFiletree');
+            const toggleRootCombined = document.getElementById('toggleRootCombined');
+            if (toggleRootFiletree) {
+                toggleRootFiletree.addEventListener('change', (event) => {
+                    vscode.postMessage({ command: 'toggleRootFiletree', checked: event.target.checked });
+                });
+            }
+
+            if (toggleRootCombined) {
+                toggleRootCombined.addEventListener('change', (event) => {
+                    vscode.postMessage({ command: 'toggleRootCombined', checked: event.target.checked });
+                });
+            }
+
+            const radioGroup = document.querySelector('vscode-radio-group');
+            if (radioGroup) {
+                radioGroup.addEventListener('change', (event) => {
+                    const isRootMode = event.target.value === 'root';
+                    if (toggleRootFiletree) toggleRootFiletree.disabled = isRootMode;
+                    if (toggleRootCombined) toggleRootCombined.disabled = isRootMode;
+                    if (isRootMode) {
+                        vscode.postMessage({ command: 'toggleRootFiletree', checked: true });
+                        vscode.postMessage({ command: 'toggleRootCombined', checked: true });
+                    } else {
+                        vscode.postMessage({ command: 'toggleRootFiletree', checked: false });
+                        vscode.postMessage({ command: 'toggleRootCombined', checked: false });
+                    }
+                });
+            }
+
+            vscode.postMessage({ command: 'webviewLoaded' });
+            vscode.postMessage({ command: 'renderContent' });
         </script>
     </body>
     </html>`;
 }
+
 
 async function generateFileTree(directoryPath: string, rootPath: string, includeDotFolders: boolean): Promise<string> {
     const tree: string[] = [path.basename(directoryPath)];
@@ -224,3 +374,5 @@ async function combineFiles(rootPath: string, directoryPath: string, includeDotF
 }
 
 export function deactivate() {}
+
+

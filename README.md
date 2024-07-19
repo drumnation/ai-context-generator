@@ -1,71 +1,61 @@
-# ai-pack README
+# AI Context Generator VS Code Extension
 
-This is the README for your extension "ai-pack". After writing up a brief description, we recommend including the following sections.
+<img src="images/icon.png" alt="Extension Icon" width="100" height="100">
+
+
+AI Context Generator is a Visual Studio Code extension designed to generate context summaries for directories and root folders, facilitating better AI-powered insights.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Generate AI context for selected directories.
+- Generate AI context for the root folder of your workspace.
+- Easily copy generated context to the clipboard.
 
-For example if there is an image subfolder under your extension project workspace:
+## Installation
 
-\!\[feature X\]\(images/feature-x.png\)
+### From the Marketplace
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1. Open Visual Studio Code.
+2. Go to the Extensions view by clicking on the Extensions icon in the Activity Bar on the side of the window or by pressing `Ctrl+Shift+X`.
+3. Search for `AI Context Generator`.
+4. Click `Install`.
 
-## Requirements
+## Usage
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Generating Directory Context
 
-## Extension Settings
+1. Right-click on a directory in the Explorer view.
+2. Select `Generate Directory Context for AI` from the context menu.
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+### Generating Root Folder Context
 
-For example:
+1. Open the Command Palette (`Ctrl+Shift+P`).
+2. Type `AI Context Generator: Generate Root Folder Context for AI` and select the command.
+3. This will generate the context for the root folder of your workspace and display it in a webview panel.
 
-This extension contributes the following settings:
+### Copying Generated Context
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+After generating the context, you can copy the content directly from the webview panel:
 
-## Known Issues
+- Click the `Copy` button above the `Tree` or `Files` sections to copy individual content.
+- Use the `Copy All` button to copy the entire generated context.
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+## Contributing
 
-## Release Notes
+Contributions are welcome! Here are some ways you can contribute:
 
-Users appreciate release notes as you update your extension.
+- **Report Bugs:** If you encounter any issues, please report them on the [Issue Tracker](https://github.com/drumnation/ai-context-generator/issues).
+- **Feature Requests:** If you have ideas for new features, feel free to submit them on the [Issue Tracker](https://github.com/drumnation/ai-context-generator/issues).
+- **Code Contributions:** Fork the repository, make your changes, and submit a pull request.
 
-### 1.0.0
+## Development
 
-Initial release of ...
+To set up the development environment:
 
-### 1.0.1
+1. Clone the repository:
 
-Fixed issue #.
+   ```sh
+   git clone https://github.com/drumnation/ai-context-generator.git
+   cd ai-context-generator
 
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+<a href="https://www.flaticon.com/free-icons/generative" title="generative icons">Generative icons created by Parzival’ 1997 - Flaticon</a>

@@ -2,7 +2,7 @@
   "name": "ai-context-generator",
   "displayName": "AI Context Generator",
   "description": "Generate context summaries for directories and root folders with AI.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "drumnation",
   "icon": "images/icon.png",
   "repository": {

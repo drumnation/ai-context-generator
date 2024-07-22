@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 
-export function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Uri, isRoot: boolean) {
-    return `
+export function getWebviewContent(
+  toolkitUri: vscode.Uri,
+  codiconsUri: vscode.Uri,
+  isRoot: boolean,
+) {
+  return `
     <!DOCTYPE html>
     <html lang="en">
     ${getHead()}
@@ -10,7 +14,7 @@ export function getWebviewContent(toolkitUri: vscode.Uri, codiconsUri: vscode.Ur
 }
 
 function getHead() {
-    return `
+  return `
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,25 +26,25 @@ function getHead() {
 }
 
 function getStyles() {
-    return `
+  return `
     <style>
-        body { 
-            padding: 20px; 
+        body {
+            padding: 20px;
             --vscode-button-icon-size: 16px;
         }
-        pre { 
-            white-space: pre-wrap; 
-            word-break: break-all; 
+        pre {
+            white-space: pre-wrap;
+            word-break: break-all;
             background-color: var(--vscode-textCodeBlock-background);
             padding: 10px;
             border-radius: 3px;
         }
-        .theme-box { 
-            border: 1px solid var(--vscode-editor-foreground); 
-            padding: 10px; 
-            margin-bottom: 10px; 
+        .theme-box {
+            border: 1px solid var(--vscode-editor-foreground);
+            padding: 10px;
+            margin-bottom: 10px;
             position: relative;
-            min-height: 100px; 
+            min-height: 100px;
         }
         .controls {
             display: flex;
@@ -59,7 +63,7 @@ function getStyles() {
             align-items: center;
         }
         h2 {
-            margin: 5px 0; 
+            margin: 5px 0;
         }
         .content-box {
             margin-top: 10px;
@@ -108,7 +112,7 @@ function getStyles() {
 }
 
 function getBody(isRoot: boolean) {
-    return `
+  return `
     <body>
         ${getControlsSection(isRoot)}
         ${getFileTreeSection(isRoot)}
@@ -119,24 +123,28 @@ function getBody(isRoot: boolean) {
 }
 
 function getControlsSection(isRoot: boolean) {
-    return `
+  return `
     <div class="theme-box controls">
         <vscode-button id="copyAll" appearance="primary">
             <span slot="start" class="codicon codicon-copy"></span>
             Copy All
         </vscode-button>
-        ${isRoot ? '' : `
+        ${
+          isRoot
+            ? ''
+            : `
         <vscode-radio-group orientation="horizontal">
             <vscode-radio value="directory" checked>Directory Mode</vscode-radio>
             <vscode-radio value="root">Root Mode</vscode-radio>
         </vscode-radio-group>
-        `}
+        `
+        }
         <vscode-checkbox id="toggleFiles">Toggle Files</vscode-checkbox>
     </div>`;
 }
 
 function getFileTreeSection(isRoot: boolean) {
-    return `
+  return `
     <div class="theme-box" id="fileTreeSection">
         <div class="spinner-container spinner" id="spinnerFileTree">
             <vscode-progress-ring></vscode-progress-ring>
@@ -160,7 +168,7 @@ function getFileTreeSection(isRoot: boolean) {
 }
 
 function getCombinedContentSection(isRoot: boolean) {
-    return `
+  return `
     <div class="theme-box" id="combinedContentSection">
         <div class="spinner-container spinner" id="spinnerCombinedContent">
             <vscode-progress-ring></vscode-progress-ring>
@@ -184,7 +192,7 @@ function getCombinedContentSection(isRoot: boolean) {
 }
 
 function getErrorMessageSection() {
-    return `
+  return `
     <div class="error-message" id="errorMessage" style="display: none;">
         <span class="codicon codicon-error error-icon"></span>
         <span>There was an error generating the content. Please try again.</span>
@@ -192,7 +200,7 @@ function getErrorMessageSection() {
 }
 
 function getScript() {
-    return `
+  return `
     <script>
         const vscode = acquireVsCodeApi();
         let fileSelections = {};

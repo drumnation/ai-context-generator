@@ -1,13 +1,19 @@
 {
-	"compilerOptions": {
-		"module": "Node16",
-		"target": "ES2022",
-		"lib": [
-			"ES2022",
-			"dom"
-		],
-		"sourceMap": true,
-		"rootDir": "src",
-		"strict": true
-	}
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "sourceMap": true,
+    "strict": true,
+    "jsx": "react",
+    "esModuleInterop": true,
+    "types": ["node", "vscode", "webpack-env"],
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["src/**/*"],
+  "files": ["webpack.config.ts", ".eslintrc.js"],
+  "exclude": ["node_modules", ".vscode-test", "out", "dist", "src/test"]
 }

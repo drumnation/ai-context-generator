@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["mocha", "node", "vscode"],
+    "module": "commonjs",
+    "target": "ES2018",
+    "sourceMap": true,
+    "outDir": "./out/test"
+  },
+  "include": [
+    "src/test/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "out"
+  ]
+}

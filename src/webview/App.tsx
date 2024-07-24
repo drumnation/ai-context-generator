@@ -2,7 +2,7 @@ import React from 'react';
 import Head from './components/Head';
 import Body from './components/Body';
 import GlobalStyle from './components/Styles';
-import { AppProvider } from './AppContext';
+import { AppProvider } from './contexts/AppContext';
 
 const App: React.FC = () => {
   return (

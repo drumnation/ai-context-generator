@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
-import * as path from "path";
+import * as vscode from 'vscode';
+import * as path from 'path';
 
 export function setupHotReload(
   context: vscode.ExtensionContext,
@@ -7,13 +7,13 @@ export function setupHotReload(
 ) {
   const updateWebview = () => {
     const scriptSrc = panel.webview.asWebviewUri(
-      vscode.Uri.file(path.join(context.extensionPath, "dist", "webview.js")),
+      vscode.Uri.file(path.join(context.extensionPath, 'dist', 'webview.js')),
     );
     const cssSrc = panel.webview.asWebviewUri(
-      vscode.Uri.file(path.join(context.extensionPath, "dist", "webview.css")),
+      vscode.Uri.file(path.join(context.extensionPath, 'dist', 'webview.css')),
     );
     const toolkitCssSrc =
-      "https://unpkg.com/@vscode/webview-ui-toolkit@1.1.0/dist/toolkit.min.css";
+      'https://unpkg.com/@vscode/webview-ui-toolkit@1.4.0/dist/toolkit.css';
 
     panel.webview.html = `<!DOCTYPE html>
         <html lang="en">
@@ -33,13 +33,13 @@ export function setupHotReload(
 
   const reloadWebview = () => {
     vscode.commands.executeCommand(
-      "workbench.action.webview.reloadWebviewAction",
+      'workbench.action.webview.reloadWebviewAction',
     );
   };
 
   // Watch the dist directory for changes
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(context.extensionPath, "dist/*"),
+    new vscode.RelativePattern(context.extensionPath, 'dist/*'),
   );
 
   watcher.onDidChange(reloadWebview);

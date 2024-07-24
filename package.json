@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "@nx/eslint": "19.5.1",
+    "@types/chai": "^4.3.16",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.7",
     "@types/node": "20.x",
@@ -76,6 +77,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "@vscode/test-cli": "^0.0.9",
     "@vscode/test-electron": "^2.4.0",
+    "chai": "^5.1.1",
     "copy-webpack-plugin": "^12.0.2",
     "cpy-cli": "^5.0.0",
     "css-loader": "^7.1.2",
@@ -83,6 +85,7 @@
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^11.0.0",
     "mocha": "^10.7.0",
     "npm-run-all": "^4.1.5",
@@ -105,6 +108,7 @@
     "path-browserify": "^1.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-window": "^1.8.10",
     "styled-components": "^6.1.12"
   }
 }

@@ -1,46 +1,28 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { VSCodeButton, VSCodeCheckbox } from '@vscode/webview-ui-toolkit/react';
-import { useAppContext } from '../AppContext';
-import { vscode } from '../vscode-api';
+import { useAppContext } from '../contexts/AppContext';
+import { vscode } from '../utils/vscode-api';
+import { useFileTree } from '../hooks/useFileTree';
 
 const FileTreeSection: React.FC = () => {
-  const { fileTree, fileSelections, handleFileSelectionChange, isRoot, mode } =
-    useAppContext();
+  const {
+    state: { isRoot, mode, fileSelections },
+  } = useAppContext();
+  const { renderedFileTree, handleFileSelectionChange } = useFileTree();
 
   const handleCopyFileTree = () => {
     vscode.postMessage({ command: 'copyFileTree' });
   };
 
-  const renderFileTree = (tree: string) => {
-    return tree.split('\n').map((line, index) => {
-      const match = line.match(/^([│├└─\s]*)(.*)/);
-      const indent = match ? match[1] : '';
-      const content = match ? match[2] : line;
-      const isChecked = fileSelections[content] !== false;
-
-      return (
-        <div
-          key={index}
-          className="file-checkbox"
-          style={{ paddingLeft: `${indent.length * 8}px` }}
-        >
-          <span className="tree-line">{indent}</span>
-          <VSCodeCheckbox
-            checked={isChecked}
-            onChange={(e) => {
-              const newSelections = {
-                ...fileSelections,
-                [content]: (e.target as HTMLInputElement).checked,
-              };
-              handleFileSelectionChange(newSelections);
-            }}
-          >
-            {content}
-          </VSCodeCheckbox>
-        </div>
-      );
-    });
-  };
+  const handleToggleRoot = useCallback(
+    (checked: boolean) => {
+      handleFileSelectionChange({
+        ...fileSelections,
+        root: checked,
+      });
+    },
+    [fileSelections, handleFileSelectionChange],
+  );
 
   return (
     <div className="theme-box" id="fileTreeSection">
@@ -58,19 +40,37 @@ const FileTreeSection: React.FC = () => {
           <VSCodeCheckbox
             style={{ marginLeft: '10px' }}
             onChange={(e) =>
-              handleFileSelectionChange({
-                ...fileSelections,
-                root: (e.target as HTMLInputElement).checked,
-              })
+              handleToggleRoot((e.target as HTMLInputElement).checked)
             }
           >
             Toggle Root
           </VSCodeCheckbox>
         )}
       </div>
-      <div className="content-box">{renderFileTree(fileTree)}</div>
+      <div className="content-box">
+        {renderedFileTree.map(({ indent, content, isChecked, index }) => (
+          <div
+            key={index}
+            className="file-checkbox"
+            style={{ paddingLeft: `${indent.length * 8}px` }}
+          >
+            <span className="tree-line">{indent}</span>
+            <VSCodeCheckbox
+              checked={isChecked}
+              onChange={(e) => {
+                handleFileSelectionChange({
+                  ...fileSelections,
+                  [content]: (e.target as HTMLInputElement).checked,
+                });
+              }}
+            >
+              {content}
+            </VSCodeCheckbox>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-export default FileTreeSection;
+export default React.memo(FileTreeSection);

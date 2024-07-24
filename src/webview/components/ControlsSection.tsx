@@ -5,12 +5,15 @@ import {
   VSCodeRadioGroup,
   VSCodeRadio,
 } from '@vscode/webview-ui-toolkit/react';
-import { useAppContext } from '../AppContext';
-import { vscode } from '../vscode-api';
+import { useAppContext } from '../contexts/AppContext';
+import { vscode } from '../utils/vscode-api';
 
 const ControlsSection: React.FC = () => {
-  const { mode, isRoot, allFilesChecked, handleModeChange, handleToggleFiles } =
-    useAppContext();
+  const {
+    state: { mode, isRoot, isLargeRepo, allFilesChecked },
+    handleModeChange,
+    handleToggleFiles,
+  } = useAppContext();
 
   const handleCopyAll = () => {
     vscode.postMessage({ command: 'copyAll' });
@@ -49,6 +52,11 @@ const ControlsSection: React.FC = () => {
       >
         Toggle Files
       </VSCodeCheckbox>
+      {isLargeRepo && (
+        <div className="warning">
+          Warning: Root mode may be slow or crash for very large repositories.
+        </div>
+      )}
     </div>
   );
 };

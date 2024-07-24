@@ -1,15 +1,12 @@
 import React from 'react';
 import { VSCodeButton, VSCodeCheckbox } from '@vscode/webview-ui-toolkit/react';
-import { useAppContext } from '../AppContext';
-import { vscode } from '../vscode-api';
+import { useAppContext } from '../contexts/AppContext';
+import { vscode } from '../utils/vscode-api';
 
 const CombinedContentSection: React.FC = () => {
   const {
-    combinedContent,
+    state: { combinedContent, fileSelections, isRoot, mode },
     handleFileSelectionChange,
-    fileSelections,
-    isRoot,
-    mode,
   } = useAppContext();
 
   const handleCopyCombinedContent = () => {

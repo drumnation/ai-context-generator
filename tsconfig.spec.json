@@ -7,11 +7,6 @@
     "sourceMap": true,
     "outDir": "./out/test"
   },
-  "include": [
-    "src/test/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "out"
-  ]
+  "include": ["src/test/**/*.ts"],
+  "exclude": ["node_modules", "out"]
 }

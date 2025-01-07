@@ -14,6 +14,14 @@
     "tab.inactiveForeground": "#E1E1E1"
   },
   "markdown.validate.enabled": false,
+  "markdownlint.config": {
+    "default": true,
+    "MD001": false,
+    "MD002": false,
+    "MD003": false,
+    "MD004": false,
+    "MD005": false
+  },
   "files.exclude": {
     "out": false,
     "dist": false

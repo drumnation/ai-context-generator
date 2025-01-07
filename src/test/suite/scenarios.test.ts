@@ -465,4 +465,150 @@ describe('Scenario-based E2E Tests', () => {
       );
     });
   });
+
+  describe('Memory Management Scenarios', () => {
+    it('should handle large files with memory constraints', async () => {
+      // Create a test folder with large files
+      const testFolder = path.join(workspaceRoot, 'test-large-files');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(testFolder));
+
+      // Create multiple large files (simulated)
+      const largeContent = Buffer.from('x'.repeat(1024 * 1024)); // 1MB content
+      for (let i = 0; i < 10; i++) {
+        const filePath = path.join(testFolder, `large-file-${i}.txt`);
+        mockFiles.set(filePath, largeContent);
+      }
+
+      // Generate markdown for the folder
+      await vscode.commands.executeCommand(
+        'ai-pack.generateMarkdown',
+        vscode.Uri.file(testFolder),
+      );
+
+      // Verify markdown was generated
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        1,
+        'Should generate one markdown file',
+      );
+
+      // Verify content
+      const content = await vscode.workspace.fs.readFile(markdownFiles[0]);
+      const markdownContent = content.toString();
+
+      // Check that all files are included
+      for (let i = 0; i < 10; i++) {
+        assert.ok(
+          markdownContent.includes(`large-file-${i}.txt`),
+          `Should include large-file-${i}.txt`,
+        );
+      }
+    });
+
+    it('should handle concurrent file processing with memory limits', async () => {
+      // Create multiple test folders with files
+      const folders = [];
+      for (let i = 0; i < 3; i++) {
+        const folderPath = path.join(workspaceRoot, `test-folder-${i}`);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(folderPath));
+        folders.push(folderPath);
+
+        // Add files to each folder
+        for (let j = 0; j < 5; j++) {
+          const filePath = path.join(folderPath, `file-${j}.txt`);
+          const content = Buffer.from(
+            `Content for file ${j} in folder ${i}`.repeat(1024),
+          ); // ~50KB
+          mockFiles.set(filePath, content);
+        }
+      }
+
+      // Process all folders concurrently
+      await Promise.all(
+        folders.map((folder) =>
+          vscode.commands.executeCommand(
+            'ai-pack.generateMarkdown',
+            vscode.Uri.file(folder),
+          ),
+        ),
+      );
+
+      // Verify markdown was generated for each folder
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        folders.length,
+        'Should generate markdown for each folder',
+      );
+
+      // Verify content of each markdown file
+      for (const markdownFile of markdownFiles) {
+        const content = await vscode.workspace.fs.readFile(markdownFile);
+        const markdownContent = content.toString();
+        const folderIndex = parseInt(
+          markdownFile.fsPath.match(/test-folder-(\d+)/)?.[1] ?? '',
+        );
+
+        // Check that all files from the folder are included
+        for (let j = 0; j < 5; j++) {
+          assert.ok(
+            markdownContent.includes(`file-${j}.txt`),
+            `Should include file-${j}.txt in folder ${folderIndex}`,
+          );
+        }
+      }
+    });
+
+    it('should cleanup resources after processing large directories', async () => {
+      // Create a deep directory structure with many files
+      const rootFolder = path.join(workspaceRoot, 'test-deep-structure');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(rootFolder));
+
+      // Create nested structure with files
+      for (let i = 0; i < 5; i++) {
+        const subFolder = path.join(rootFolder, `level-${i}`);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(subFolder));
+
+        for (let j = 0; j < 10; j++) {
+          const filePath = path.join(subFolder, `file-${j}.txt`);
+          const content = Buffer.from(
+            `Content for file ${j} in level ${i}`.repeat(512),
+          ); // ~25KB
+          mockFiles.set(filePath, content);
+        }
+      }
+
+      // Generate markdown for the root folder
+      await vscode.commands.executeCommand(
+        'ai-pack.generateMarkdown',
+        vscode.Uri.file(rootFolder),
+      );
+
+      // Verify markdown was generated
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        1,
+        'Should generate one markdown file',
+      );
+
+      // Verify content includes all levels
+      const content = await vscode.workspace.fs.readFile(markdownFiles[0]);
+      const markdownContent = content.toString();
+
+      for (let i = 0; i < 5; i++) {
+        assert.ok(
+          markdownContent.includes(`level-${i}`),
+          `Should include level-${i}`,
+        );
+        for (let j = 0; j < 10; j++) {
+          assert.ok(
+            markdownContent.includes(`file-${j}.txt`),
+            `Should include file-${j}.txt in level ${i}`,
+          );
+        }
+      }
+    });
+  });
 });

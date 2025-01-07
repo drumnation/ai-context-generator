@@ -7,16 +7,14 @@
 - [x] Add proper cleanup between tests
 - [x] Fix test timeouts and stability issues
 - [x] Update mock extension to generate realistic markdown content
+- [x] Memory Management Improvements
+  - [x] Optimize file content storage
+  - [x] Implement resource cleanup strategies
+  - [x] Add automatic chunk sizing
+  - [x] Add memory usage monitoring
+  - [x] Implement garbage collection for large files
 
 ## In Progress
-- [ ] Memory Management Improvements
-  - [ ] Optimize file content storage
-  - [ ] Implement resource cleanup strategies
-  - [ ] Add automatic chunk sizing
-  - [ ] Add memory usage monitoring
-  - [ ] Implement garbage collection for large files
-
-## Pending Tasks
 
 ### Performance Optimization
 - [ ] Implement caching for frequently accessed files
@@ -24,6 +22,8 @@
 - [ ] Optimize file tree generation
 - [ ] Add progress indicators for long-running operations
 - [ ] Implement incremental updates
+
+## Pending Tasks
 
 ### Testing and Validation
 - [ ] Add performance benchmarks

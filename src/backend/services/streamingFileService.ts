@@ -1,5 +1,5 @@
 import * as path from 'path';
-import * as fs from 'fs/promises';
+import * as fsPromises from 'fs/promises';
 import { Readable } from 'stream';
 import { FileService } from './fileService';
 import { logger } from '../../shared/logger';
@@ -19,20 +19,34 @@ interface MemoryStats {
   rss: number;
 }
 
+interface ProcessingResult {
+  content: string;
+  path: string;
+}
+
+interface FileEntry {
+  name: string;
+  isDirectory: () => boolean;
+}
+
 export class StreamingFileService extends FileService {
   private activeStreams: Map<string, FileStream> = new Map();
   private readonly maxConcurrentStreams = 5;
   private readonly HIGH_MEMORY_THRESHOLD = 100 * 1024 * 1024; // 100MB
   private readonly CRITICAL_MEMORY_THRESHOLD = 200 * 1024 * 1024; // 200MB
+  private maxParallelOperations: number = 4; // Maximum number of parallel operations
   private totalStreamSize = 0;
   private lastGarbageCollection = Date.now();
   private readonly GC_INTERVAL = 30000; // 30 seconds
   private fileCache: CacheService<string>;
 
-  constructor(maxCacheSize: number = 50 * 1024 * 1024) {
-    // 50MB default cache size
+  constructor(
+    maxCacheSize: number = 50 * 1024 * 1024, // 50MB default cache size
+    maxParallelOps: number = 4,
+  ) {
     super();
     this.fileCache = new CacheService<string>(maxCacheSize);
+    this.maxParallelOperations = maxParallelOps;
   }
 
   private getMemoryStats(): MemoryStats {
@@ -136,7 +150,7 @@ export class StreamingFileService extends FileService {
       return cachedContent;
     }
 
-    const stats = await fs.stat(filePath);
+    const stats = await fsPromises.stat(filePath);
     const fileSize = stats.size;
 
     // Check memory before creating a new stream
@@ -168,7 +182,7 @@ export class StreamingFileService extends FileService {
     }
 
     // Create a new stream
-    const fileHandle = await fs.open(filePath, 'r');
+    const fileHandle = await fsPromises.open(filePath, 'r');
     const stream = fileHandle.createReadStream();
 
     const cleanup = () => {
@@ -225,6 +239,66 @@ export class StreamingFileService extends FileService {
     }
   }
 
+  private async processDirectoryChunk(
+    rootPath: string,
+    entries: FileEntry[],
+    includeDotFolders: boolean,
+    options: ProcessingOptions,
+  ): Promise<ProcessingResult[]> {
+    const results: ProcessingResult[] = [];
+
+    for (const entry of entries) {
+      if (options.cancelToken?.isCancellationRequested) {
+        break;
+      }
+
+      if (this.isExcluded(entry.name, includeDotFolders)) {
+        continue;
+      }
+
+      const fullPath = path.join(rootPath, entry.name);
+      const relativePath = path.relative(path.dirname(rootPath), fullPath);
+
+      if (this.shouldTriggerGC()) {
+        await this.garbageCollect();
+      }
+
+      try {
+        if (entry.isDirectory()) {
+          const subContent = await this.combineFiles(
+            path.dirname(rootPath),
+            fullPath,
+            includeDotFolders,
+            options,
+          );
+          if (subContent) {
+            results.push({
+              content: `\n// Directory: ${relativePath}\n${subContent}`,
+              path: relativePath,
+            });
+          }
+        } else {
+          const content = await this.readFileWithStream(fullPath);
+          results.push({
+            content: `\n// File: ${relativePath}\n${content}\n`,
+            path: relativePath,
+          });
+        }
+      } catch (error) {
+        logger.error('Error processing entry:', {
+          error,
+          path: fullPath,
+        });
+        results.push({
+          content: `\n// Error processing: ${relativePath}\n\n`,
+          path: relativePath,
+        });
+      }
+    }
+
+    return results;
+  }
+
   async combineFiles(
     rootPath: string,
     directoryPath: string,
@@ -232,49 +306,49 @@ export class StreamingFileService extends FileService {
     options: ProcessingOptions,
   ): Promise<string> {
     try {
-      const entries = await fs.readdir(directoryPath, { withFileTypes: true });
-      let combinedContent = '';
+      const entries = await fsPromises.readdir(directoryPath, {
+        withFileTypes: true,
+      });
 
-      for (const entry of entries) {
-        if (options.cancelToken?.isCancellationRequested) {
-          await this.cleanupAllStreams();
-          break;
-        }
-
-        if (this.isExcluded(entry.name, includeDotFolders)) {
-          continue;
-        }
-
-        const fullPath = path.join(directoryPath, entry.name);
-        const relativePath = path.relative(rootPath, fullPath);
-
-        // Check memory status and perform GC if needed
-        if (this.shouldTriggerGC()) {
-          await this.garbageCollect();
-        }
-
-        if (entry.isDirectory()) {
-          const subContent = await this.combineFiles(
-            rootPath,
-            fullPath,
-            includeDotFolders,
-            options,
-          );
-          if (subContent) {
-            combinedContent += `\n// Directory: ${relativePath}\n${subContent}`;
-          }
-        } else {
-          try {
-            const content = await this.readFileWithStream(fullPath);
-            combinedContent += `\n// File: ${relativePath}\n${content}\n`;
-          } catch (error) {
-            logger.error('Error reading file:', { error, filePath: fullPath });
-            combinedContent += `\n// File: ${relativePath}\n\n`;
-          }
-        }
+      // If few entries, process sequentially
+      if (entries.length <= this.maxParallelOperations) {
+        const results = await this.processDirectoryChunk(
+          directoryPath,
+          entries,
+          includeDotFolders,
+          options,
+        );
+        return results
+          .sort((a, b) => a.path.localeCompare(b.path))
+          .map((r) => r.content)
+          .join('');
       }
 
-      return combinedContent;
+      // Split entries into chunks for parallel processing
+      const chunkSize = Math.ceil(entries.length / this.maxParallelOperations);
+      const chunks = Array.from(
+        { length: Math.ceil(entries.length / chunkSize) },
+        (_, i) => entries.slice(i * chunkSize, (i + 1) * chunkSize),
+      );
+
+      // Process chunks in parallel
+      const chunkResults = await Promise.all(
+        chunks.map((chunk) =>
+          this.processDirectoryChunk(
+            directoryPath,
+            chunk,
+            includeDotFolders,
+            options,
+          ),
+        ),
+      );
+
+      // Combine and sort results
+      const allResults = chunkResults.flat();
+      return allResults
+        .sort((a, b) => a.path.localeCompare(b.path))
+        .map((r) => r.content)
+        .join('');
     } catch (error) {
       await this.cleanupAllStreams();
       logger.error('Error combining files:', { error, directoryPath });

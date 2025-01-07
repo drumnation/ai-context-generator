@@ -18,11 +18,13 @@
   - [x] Implement caching for frequently accessed files
   - [x] Add unit tests for caching service
   - [x] Add E2E tests for caching scenarios
+  - [x] Add parallel processing for large directories
+  - [x] Add unit tests for parallel processing
+  - [x] Add E2E tests for parallel processing
 
 ## In Progress
 
 ### Performance Optimization
-- [ ] Add parallel processing for large directories
 - [ ] Optimize file tree generation
 - [ ] Add progress indicators for long-running operations
 - [ ] Implement incremental updates

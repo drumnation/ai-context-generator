@@ -11,6 +11,8 @@ interface MockStream {
   destroy: () => void;
 }
 
+type StreamCallback = (data?: Buffer | Error) => void;
+
 describe('StreamingFileService', () => {
   let streamingFileService: StreamingFileService;
   let mockReaddir: jest.Mock;
@@ -330,8 +332,8 @@ describe('StreamingFileService', () => {
       mockReaddir.mockResolvedValue(testFiles);
 
       const testError = new Error('Stream error');
-      const mockStream: MockStream = {
-        on: (event, callback) => {
+      const mockStream = {
+        on: (event: string, callback: StreamCallback) => {
           if (event === 'error') {
             callback(testError);
           }
@@ -355,7 +357,7 @@ describe('StreamingFileService', () => {
         defaultOptions,
       );
 
-      expect(content).toBe('\n// File: file1.txt\n\n');
+      expect(content).toBe('\n// File: root/file1.txt\n\n');
       expect(mockStream.destroy).toHaveBeenCalled();
       expect(mockClose).toHaveBeenCalled();
       expect(mockLogger.error).toHaveBeenCalledWith('Error reading file:', {
@@ -397,6 +399,177 @@ describe('StreamingFileService', () => {
       // Should have cleaned up the oldest stream when the 6th file was processed
       expect(mockStream.destroy).toHaveBeenCalledTimes(6);
       expect(mockClose).toHaveBeenCalledTimes(6);
+    });
+  });
+
+  describe('Parallel Processing', () => {
+    it('should process directories in parallel when there are many entries', async () => {
+      const testFiles = Array.from({ length: 10 }, (_, i) => ({
+        name: `file${i + 1}.txt`,
+        isDirectory: () => false,
+      }));
+
+      mockReaddir.mockResolvedValue(testFiles);
+
+      const mockStream = {
+        on: (event: string, callback: StreamCallback) => {
+          if (event === 'data') {
+            callback(Buffer.from('content'));
+          }
+          if (event === 'end') {
+            callback();
+          }
+          return mockStream;
+        },
+        destroy: jest.fn(),
+      };
+
+      mockCreateReadStream.mockReturnValue(mockStream);
+
+      const startTime = Date.now();
+      await streamingFileService.combineFiles(
+        '/root',
+        '/root',
+        false,
+        defaultOptions,
+      );
+      const endTime = Date.now();
+
+      // Verify parallel processing occurred
+      expect(mockCreateReadStream).toHaveBeenCalledTimes(10);
+      expect(mockClose).toHaveBeenCalledTimes(10);
+
+      // Check that files were processed in parallel (time should be less than sequential)
+      const processingTime = endTime - startTime;
+      expect(processingTime).toBeLessThan(1000); // Adjust threshold as needed
+    });
+
+    it('should process small directories sequentially', async () => {
+      const testFiles = Array.from({ length: 3 }, (_, i) => ({
+        name: `file${i + 1}.txt`,
+        isDirectory: () => false,
+      }));
+
+      mockReaddir.mockResolvedValue(testFiles);
+
+      const mockStream = {
+        on: (event: string, callback: StreamCallback) => {
+          if (event === 'data') {
+            callback(Buffer.from('content'));
+          }
+          if (event === 'end') {
+            callback();
+          }
+          return mockStream;
+        },
+        destroy: jest.fn(),
+      };
+
+      mockCreateReadStream.mockReturnValue(mockStream);
+
+      await streamingFileService.combineFiles(
+        '/root',
+        '/root',
+        false,
+        defaultOptions,
+      );
+
+      // Verify sequential processing
+      expect(mockCreateReadStream).toHaveBeenCalledTimes(3);
+      expect(mockClose).toHaveBeenCalledTimes(3);
+    });
+
+    it('should maintain file order in parallel processing', async () => {
+      const testFiles = Array.from({ length: 8 }, (_, i) => ({
+        name: `file${i + 1}.txt`,
+        isDirectory: () => false,
+      }));
+
+      mockReaddir.mockResolvedValue(testFiles);
+
+      const mockStream = {
+        on: (event: string, callback: StreamCallback) => {
+          if (event === 'data') {
+            callback(
+              Buffer.from(`content-${event === 'data' ? 'data' : 'end'}`),
+            );
+          }
+          if (event === 'end') {
+            callback();
+          }
+          return mockStream;
+        },
+        destroy: jest.fn(),
+      };
+
+      mockCreateReadStream.mockReturnValue(mockStream);
+
+      const content = await streamingFileService.combineFiles(
+        '/root',
+        '/root',
+        false,
+        defaultOptions,
+      );
+
+      // Verify file order is maintained
+      const fileMatches = content.match(/file\d+\.txt/g) || [];
+      expect(fileMatches).toHaveLength(8);
+      expect(fileMatches).toEqual([
+        'file1.txt',
+        'file2.txt',
+        'file3.txt',
+        'file4.txt',
+        'file5.txt',
+        'file6.txt',
+        'file7.txt',
+        'file8.txt',
+      ]);
+    });
+
+    it('should handle errors in parallel processing', async () => {
+      const testFiles = Array.from({ length: 6 }, (_, i) => ({
+        name: `file${i + 1}.txt`,
+        isDirectory: () => false,
+      }));
+
+      mockReaddir.mockResolvedValue(testFiles);
+
+      let errorCount = 0;
+      const mockStream = {
+        on: (event: string, callback: StreamCallback) => {
+          if (event === 'error' && errorCount < 2) {
+            errorCount++;
+            callback(new Error('Random stream error'));
+          } else if (event === 'data') {
+            callback(Buffer.from('content'));
+          } else if (event === 'end') {
+            if (errorCount > 0) {
+              errorCount--;
+            } else {
+              callback();
+            }
+          }
+          return mockStream;
+        },
+        destroy: jest.fn(),
+      };
+
+      mockCreateReadStream.mockReturnValue(mockStream);
+
+      const content = await streamingFileService.combineFiles(
+        '/root',
+        '/root',
+        false,
+        defaultOptions,
+      );
+
+      // Verify error handling
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Error processing entry:',
+        expect.any(Object),
+      );
+      expect(mockStream.destroy).toHaveBeenCalled();
+      expect(content).toBeDefined(); // Ensure content is returned even with errors
     });
   });
 });

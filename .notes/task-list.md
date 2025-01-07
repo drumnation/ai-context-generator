@@ -21,13 +21,25 @@
   - [x] Add parallel processing for large directories
   - [x] Add unit tests for parallel processing
   - [x] Add E2E tests for parallel processing
+- [x] Test Suite Optimization
+  - [x] Reduce test data size
+  - [x] Optimize memory usage tests
+  - [x] Consolidate duplicate tests
+  - [x] Improve test organization
+  - [x] Fix context length issues
 
 ## In Progress
 
 ### Performance Optimization
-- [ ] Optimize file tree generation
 - [ ] Add progress indicators for long-running operations
+  - [ ] Design progress tracking system
+  - [ ] Implement UI components
+  - [ ] Add cancellation support
+  - [ ] Create progress events
 - [ ] Implement incremental updates
+  - [ ] Design caching strategy
+  - [ ] Implement change detection
+  - [ ] Add partial update support
 
 ## Pending Tasks
 

@@ -209,11 +209,19 @@ export class FileService {
     }
   }
 
-  private shouldSkip(name: string, includeDotFolders: boolean): boolean {
+  protected shouldSkip(name: string, includeDotFolders: boolean): boolean {
+    if (includeDotFolders && name.startsWith('.')) {
+      return false;
+    }
+
     if (!includeDotFolders && name.startsWith('.')) {
       return true;
     }
 
-    return this.excludedFolders.has(name) || this.excludedFiles.has(name);
+    if (!name.startsWith('.')) {
+      return this.excludedFolders.has(name) || this.excludedFiles.has(name);
+    }
+
+    return false;
   }
 }

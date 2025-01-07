@@ -13,6 +13,7 @@
   - [x] Add automatic chunk sizing
   - [x] Add memory usage monitoring
   - [x] Implement garbage collection for large files
+  - [x] Add E2E tests for memory management features
 
 ## In Progress
 
@@ -29,7 +30,6 @@
 - [ ] Add performance benchmarks
 - [ ] Implement stress tests for large codebases
 - [ ] Add error boundary tests
-- [ ] Improve test coverage for edge cases
 - [ ] Add integration tests for VS Code API interactions
 
 ### User Experience

@@ -74,17 +74,27 @@ export class PerformanceService {
     try {
       // Profile the file tree generation
       this.startOperation('generateFileTree');
-      await this.fileService.generateFileTree(
-        directoryPath,
-        directoryPath,
-        false,
-      );
-      this.endOperation('generateFileTree');
+      try {
+        await this.fileService.generateFileTree(
+          directoryPath,
+          directoryPath,
+          false,
+        );
+      } finally {
+        this.endOperation('generateFileTree');
+      }
 
       // Profile the file combining operation
       this.startOperation('combineFiles');
-      await this.fileService.combineFiles(directoryPath, directoryPath, false);
-      this.endOperation('combineFiles');
+      try {
+        await this.fileService.combineFiles(
+          directoryPath,
+          directoryPath,
+          false,
+        );
+      } finally {
+        this.endOperation('combineFiles');
+      }
     } finally {
       this.endOperation('directoryScanning');
     }

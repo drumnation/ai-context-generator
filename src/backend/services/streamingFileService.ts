@@ -4,6 +4,7 @@ import { Readable } from 'stream';
 import { FileService } from './fileService';
 import { logger } from '../../shared/logger';
 import { ProcessingOptions } from './queueService';
+import { CacheService } from './cacheService';
 
 interface FileStream {
   stream: Readable;
@@ -26,6 +27,13 @@ export class StreamingFileService extends FileService {
   private totalStreamSize = 0;
   private lastGarbageCollection = Date.now();
   private readonly GC_INTERVAL = 30000; // 30 seconds
+  private fileCache: CacheService<string>;
+
+  constructor(maxCacheSize: number = 50 * 1024 * 1024) {
+    // 50MB default cache size
+    super();
+    this.fileCache = new CacheService<string>(maxCacheSize);
+  }
 
   private getMemoryStats(): MemoryStats {
     const { heapUsed, heapTotal, rss } = process.memoryUsage();
@@ -121,6 +129,13 @@ export class StreamingFileService extends FileService {
   }
 
   private async readFileWithStream(filePath: string): Promise<string> {
+    // Check cache first
+    const cachedContent = this.fileCache.get(filePath);
+    if (cachedContent !== undefined) {
+      logger.info('Cache hit', { filePath });
+      return cachedContent;
+    }
+
     const stats = await fs.stat(filePath);
     const fileSize = stats.size;
 
@@ -138,8 +153,11 @@ export class StreamingFileService extends FileService {
         const chunks: Buffer[] = [];
         existingStream.stream.on('data', (chunk: Buffer) => chunks.push(chunk));
         existingStream.stream.on('end', () => {
-          resolve(Buffer.concat(chunks).toString('utf-8'));
+          const content = Buffer.concat(chunks).toString('utf-8');
+          resolve(content);
           this.cleanupStream(filePath);
+          // Cache the content for future use
+          this.fileCache.set(filePath, content, fileSize);
         });
         existingStream.stream.on('error', (error) => {
           logger.error('Error reading file:', { error, filePath });
@@ -183,8 +201,11 @@ export class StreamingFileService extends FileService {
       const chunks: Buffer[] = [];
       stream.on('data', (chunk: Buffer) => chunks.push(chunk));
       stream.on('end', () => {
-        resolve(Buffer.concat(chunks).toString('utf-8'));
+        const content = Buffer.concat(chunks).toString('utf-8');
+        resolve(content);
         this.cleanupStream(filePath);
+        // Cache the content for future use
+        this.fileCache.set(filePath, content, fileSize);
       });
       stream.on('error', (error) => {
         logger.error('Error reading file:', { error, filePath });
@@ -268,5 +289,10 @@ export class StreamingFileService extends FileService {
     }
 
     return this.excludedFolders.has(name) || this.excludedFiles.has(name);
+  }
+
+  // For testing
+  getCacheStats() {
+    return this.fileCache.getStats();
   }
 }

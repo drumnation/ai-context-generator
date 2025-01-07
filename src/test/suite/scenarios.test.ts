@@ -611,4 +611,150 @@ describe('Scenario-based E2E Tests', () => {
       }
     });
   });
+
+  describe('File Caching Scenarios', () => {
+    it('should cache and reuse frequently accessed files', async () => {
+      // Create a test folder with some files
+      const testFolder = path.join(workspaceRoot, 'test-cache');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(testFolder));
+
+      // Create test files
+      const fileContent = Buffer.from('Test content'.repeat(100)); // ~1KB
+      const filePaths = [];
+      for (let i = 0; i < 3; i++) {
+        const filePath = path.join(testFolder, `file-${i}.txt`);
+        mockFiles.set(filePath, fileContent);
+        filePaths.push(filePath);
+      }
+
+      // Access the same files multiple times
+      for (let i = 0; i < 3; i++) {
+        await vscode.commands.executeCommand(
+          'ai-pack.generateMarkdown',
+          vscode.Uri.file(testFolder),
+        );
+      }
+
+      // Verify markdown was generated
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        1,
+        'Should generate one markdown file',
+      );
+
+      // Verify content
+      const content = await vscode.workspace.fs.readFile(markdownFiles[0]);
+      const markdownContent = content.toString();
+
+      // Check that all files are included
+      for (let i = 0; i < 3; i++) {
+        assert.ok(
+          markdownContent.includes(`file-${i}.txt`),
+          `Should include file-${i}.txt`,
+        );
+      }
+    });
+
+    it('should handle cache eviction for large files', async () => {
+      // Create a test folder with large files
+      const testFolder = path.join(workspaceRoot, 'test-large-cache');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(testFolder));
+
+      // Create multiple large files that exceed cache size
+      const largeContent = Buffer.from('x'.repeat(1024 * 1024 * 20)); // 20MB content
+      for (let i = 0; i < 3; i++) {
+        const filePath = path.join(testFolder, `large-file-${i}.txt`);
+        mockFiles.set(filePath, largeContent);
+      }
+
+      // Generate markdown multiple times
+      for (let i = 0; i < 3; i++) {
+        await vscode.commands.executeCommand(
+          'ai-pack.generateMarkdown',
+          vscode.Uri.file(testFolder),
+        );
+      }
+
+      // Verify markdown was generated
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        1,
+        'Should generate one markdown file',
+      );
+
+      // Verify content
+      const content = await vscode.workspace.fs.readFile(markdownFiles[0]);
+      const markdownContent = content.toString();
+
+      // Check that all files are included
+      for (let i = 0; i < 3; i++) {
+        assert.ok(
+          markdownContent.includes(`large-file-${i}.txt`),
+          `Should include large-file-${i}.txt`,
+        );
+      }
+    });
+
+    it('should handle concurrent access to cached files', async () => {
+      // Create a test folder with files
+      const testFolder = path.join(workspaceRoot, 'test-concurrent-cache');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(testFolder));
+
+      // Create test files
+      const fileContent = Buffer.from('Test content'.repeat(100)); // ~1KB
+      for (let i = 0; i < 5; i++) {
+        const filePath = path.join(testFolder, `file-${i}.txt`);
+        mockFiles.set(filePath, fileContent);
+      }
+
+      // Create multiple subfolders that reference the same files
+      const subFolders = [];
+      for (let i = 0; i < 3; i++) {
+        const subFolder = path.join(testFolder, `subfolder-${i}`);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(subFolder));
+        subFolders.push(subFolder);
+
+        // Create symbolic links or references to original files
+        for (let j = 0; j < 5; j++) {
+          const originalPath = path.join(testFolder, `file-${j}.txt`);
+          const linkPath = path.join(subFolder, `file-${j}.txt`);
+          mockFiles.set(linkPath, mockFiles.get(originalPath)!);
+        }
+      }
+
+      // Process all subfolders concurrently
+      await Promise.all(
+        subFolders.map((folder) =>
+          vscode.commands.executeCommand(
+            'ai-pack.generateMarkdown',
+            vscode.Uri.file(folder),
+          ),
+        ),
+      );
+
+      // Verify markdown was generated for each subfolder
+      const markdownFiles = await vscode.workspace.findFiles('**/context.md');
+      assert.strictEqual(
+        markdownFiles.length,
+        subFolders.length,
+        'Should generate markdown for each subfolder',
+      );
+
+      // Verify content of each markdown file
+      for (const markdownFile of markdownFiles) {
+        const content = await vscode.workspace.fs.readFile(markdownFile);
+        const markdownContent = content.toString();
+
+        // Check that all files are included
+        for (let j = 0; j < 5; j++) {
+          assert.ok(
+            markdownContent.includes(`file-${j}.txt`),
+            `Should include file-${j}.txt`,
+          );
+        }
+      }
+    });
+  });
 });

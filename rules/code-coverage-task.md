@@ -2,9 +2,9 @@
 
 ### Current Coverage Summary
 - Total TypeScript Files: 24
-- Files With Tests: 4 (fileService.ts, logger.ts, extension.ts, and performanceService.ts)
-- Files Without Tests: 20
-- Actual Coverage: ~16.7% of codebase
+- Files With Tests: 6 (fileService.ts, logger.ts, extension.ts, performanceService.ts, markdownService.ts, and markdownGenerator.ts)
+- Files Without Tests: 18
+- Actual Coverage: ~25% of codebase
 
 ### Areas Needing Attention
 
@@ -20,27 +20,31 @@
     - [x] Memory usage monitoring tests
     - [x] Directory scanning profiling tests
     - [x] Error handling and cleanup tests
-  - [ ] Add tests for markdownGenerator.ts
-    - [ ] Test markdown generation
-    - [ ] Test code block formatting
-    - [ ] Test error handling
-  - [ ] Add tests for markdownService.ts
-    - [ ] Test service initialization
-    - [ ] Test markdown processing
-    - [ ] Test file handling
+  - [x] Add tests for markdownGenerator.ts
+    - [x] Test markdown generation workflow
+    - [x] Test webview updates
+    - [x] Test error handling
+    - [x] Test mode switching (root vs directory)
+  - [x] Add tests for markdownService.ts
+    - [x] Test clipboard operations
+    - [x] Test error handling
+    - [x] Test edge cases (undefined content)
 
-- [ ] Dependency Injection
+- [ ] Dependency Injection (Next Priority)
   - [ ] Add tests for container-base.ts
     - [ ] Test container initialization
     - [ ] Test dependency registration
     - [ ] Test dependency resolution
+    - [ ] Test singleton vs transient lifecycles
   - [ ] Add tests for container.ts
     - [ ] Test specific container implementations
     - [ ] Test scoping rules
     - [ ] Test lifecycle management
+    - [ ] Test circular dependency detection
   - [ ] Add tests for DI types and interfaces
     - [ ] Test type constraints
     - [ ] Test interface implementations
+    - [ ] Test dependency resolution errors
 
 - [ ] Webview Components
   - [ ] Add tests for hooks
@@ -98,7 +102,7 @@
   - [x] Document operation timing patterns
   - [x] Document error handling in performance tests
 - [ ] Create testing documentation for remaining services
-  - [ ] Document markdown testing patterns
+  - [x] Document markdown testing patterns
   - [ ] Document DI testing patterns
   - [ ] Document webview testing patterns
 
@@ -106,7 +110,9 @@
 - [ ] Phase 1: Achieve basic test coverage (50%)
   - [x] Add tests for FileService
   - [x] Add tests for PerformanceService
-  - [ ] Add tests for MarkdownService
+  - [x] Add tests for MarkdownService
+  - [x] Add tests for MarkdownGenerator
+  - [ ] Test DI container system
   - [ ] Test core utilities
 - [ ] Phase 2: Improve coverage quality (75%)
   - [ ] Add integration tests
@@ -128,7 +134,13 @@
   - Operation timing and profiling
   - Error handling and cleanup
   - Nested operation tracking
-- Next focus should be on MarkdownService or container tests
-- Follow established patterns from FileService and PerformanceService tests
-- Use proper mocking for VS Code API
-- Consider setting up CI/CD for automated test runs
+- ✅ MarkdownService and MarkdownGenerator tests demonstrate:
+  - VSCode API mocking (clipboard, webview, cancellation)
+  - Error handling and user feedback
+  - Component integration testing
+  - State management in webview updates
+- Next focus should be on DI container system:
+  - Start with container-base.ts as it's the foundation
+  - Follow established patterns for error handling
+  - Ensure proper lifecycle management testing
+  - Consider edge cases like circular dependencies

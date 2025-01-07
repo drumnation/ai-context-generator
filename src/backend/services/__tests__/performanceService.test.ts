@@ -1,12 +1,23 @@
-import * as vscode from 'vscode';
 import { PerformanceService } from '../performanceService';
 import { FileService } from '../fileService';
 import { logger } from '../../../shared/logger';
+import mockVSCode from '../../../test/vscode.mock';
 
 // Mock dependencies
-jest.mock('vscode');
 jest.mock('../fileService');
 jest.mock('../../../shared/logger');
+
+// Mock VSCode
+jest.mock('vscode', () => {
+  const mockVSCode = jest.requireActual('../../../test/vscode.mock').default;
+  return {
+    ...mockVSCode,
+    window: {
+      ...mockVSCode.window,
+      showWarningMessage: jest.fn(),
+    },
+  };
+});
 
 // Mock process.memoryUsage
 const mockMemoryUsage: NodeJS.MemoryUsage = {
@@ -34,7 +45,9 @@ describe('PerformanceService', () => {
     // Reset mocks
     mockFileService = new FileService() as jest.Mocked<FileService>;
     mockShowWarningMessage = jest.fn();
-    (vscode.window.showWarningMessage as jest.Mock) = mockShowWarningMessage;
+    mockVSCode.window.showWarningMessage.mockImplementation(
+      mockShowWarningMessage,
+    );
 
     performanceService = new PerformanceService(mockFileService);
 

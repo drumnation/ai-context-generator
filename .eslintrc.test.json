@@ -1,0 +1,10 @@
+{
+  "extends": "./.eslintrc.json",
+  "parserOptions": {
+    "project": "./src/test/tsconfig.test.json"
+  },
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-non-null-assertion": "off"
+  }
+}

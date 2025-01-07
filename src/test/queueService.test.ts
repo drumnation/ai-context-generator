@@ -1,11 +1,17 @@
-import * as vscode from 'vscode';
-import {
-  QueueService,
-  ProcessingOptions,
-} from '../backend/services/queueService';
+// Mock VSCode
+jest.mock('vscode', () => {
+  const mockVSCode = jest.requireActual('./vscode.mock').default;
+  return {
+    ...mockVSCode,
+    window: {
+      ...mockVSCode.window,
+      withProgress: jest.fn(),
+    },
+  };
+});
 
-// Mock vscode namespace
-jest.mock('vscode');
+import { QueueService, ProcessingOptions } from '../backend/services/queueService';
+import mockVSCode from './vscode.mock';
 
 describe('QueueService', () => {
   let queueService: QueueService;
@@ -14,13 +20,14 @@ describe('QueueService', () => {
   beforeEach(() => {
     queueService = new QueueService();
     mockProgress = jest.fn();
-    (vscode.window.withProgress as jest.Mock).mockImplementation(
-      async (options, task) => {
-        const progress = { report: mockProgress };
-        const token = { isCancellationRequested: false };
-        return task(progress, token);
-      },
-    );
+    mockVSCode.window.withProgress.mockImplementation(async (options, task) => {
+      const progress = { report: mockProgress };
+      const token = {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: () => {} }),
+      };
+      return task(progress, token);
+    });
   });
 
   afterEach(() => {
@@ -101,10 +108,13 @@ describe('QueueService', () => {
     });
 
     it('should respect cancellation token', async () => {
-      const cancelToken = { isCancellationRequested: true };
+      const cancelToken = {
+        isCancellationRequested: true,
+        onCancellationRequested: () => ({ dispose: () => {} }),
+      };
       const optionsWithCancel: ProcessingOptions = {
         ...options,
-        cancelToken: cancelToken as vscode.CancellationToken,
+        cancelToken,
       };
 
       const results = await queueService.processChunked(

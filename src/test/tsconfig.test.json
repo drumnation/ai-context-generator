@@ -21,7 +21,10 @@
   },
   "include": [
     "./**/*",
-    "../backend/**/*"
+    "../**/__tests__/**/*",
+    "../backend/**/*",
+    "../di/**/*",
+    "../test/**/*"
   ],
   "exclude": [
     "node_modules",

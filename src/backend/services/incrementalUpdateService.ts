@@ -48,7 +48,8 @@ export class IncrementalUpdateService {
       // Check each current file
       for (const filePath of currentFiles) {
         if (!previousFilePaths.has(filePath)) {
-          // New file
+          // New file - initialize its state without marking as changed
+          await this.initializeFileState(filePath);
           result.newFiles.push(filePath);
           continue;
         }
@@ -107,6 +108,19 @@ export class IncrementalUpdateService {
     return files.sort(); // Sort for consistent ordering
   }
 
+  private async initializeFileState(filePath: string): Promise<void> {
+    try {
+      const stats = await fsPromises.stat(filePath);
+      const metadata: FileMetadata = {
+        mtime: stats.mtime,
+        size: stats.size,
+      };
+      this.updateFileState(filePath, metadata);
+    } catch (error) {
+      logger.error('Error initializing file state:', { error, filePath });
+    }
+  }
+
   private async checkFileChanged(filePath: string): Promise<boolean> {
     try {
       const stats = await fsPromises.stat(filePath);
@@ -117,6 +131,7 @@ export class IncrementalUpdateService {
 
       const state = this.fileStates.get(filePath);
       if (!state) {
+        // If no state exists for a known file, consider it changed
         this.updateFileState(filePath, currentMetadata);
         return true;
       }

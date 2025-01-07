@@ -28,7 +28,9 @@
     - [x] Design caching strategy
     - [x] Implement change detection
     - [x] Add partial update support
-    - [x] Add progress tracking for updates
+    - [x] Add state management
+    - [x] Add E2E tests
+    - [x] Fix state initialization issues
 - [x] Fix StreamingFileService Tests
   - [x] Fix file tree generation test
   - [x] Fix cancellation handling
@@ -150,3 +152,27 @@
 - [ ] Review error handling patterns
 - [ ] Consider performance optimizations
 - [ ] Add automated performance regression checks
+
+### Performance Testing
+- [ ] Add performance benchmarks for incremental updates
+  - [ ] Define benchmark metrics
+  - [ ] Create baseline measurements
+  - [ ] Test with large directories
+  - [ ] Measure memory usage
+- [ ] Implement stress tests
+  - [ ] Define test scenarios
+  - [ ] Create test data generators
+  - [ ] Add monitoring
+  - [ ] Document results
+
+### Documentation
+- [ ] Document incremental update system
+  - [ ] Configuration options
+  - [ ] Change detection strategy
+  - [ ] State management
+  - [ ] Best practices
+- [ ] Create troubleshooting guide
+  - [ ] Common issues
+  - [ ] Solutions
+  - [ ] Performance tips
+  - [ ] Examples

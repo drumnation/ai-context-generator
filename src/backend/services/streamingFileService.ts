@@ -9,6 +9,10 @@ import { CacheService } from './cacheService';
 import { ProgressService } from './progressService';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import {
+  IncrementalUpdateService,
+  UpdateResult,
+} from './incrementalUpdateService';
 
 interface FileStream {
   stream: Readable;
@@ -39,7 +43,7 @@ interface DirectoryCache {
   includeDotFolders: boolean;
 }
 
-interface FileMetadata {
+export interface FileMetadata {
   mtime: Date;
   size: number;
   hash?: string;
@@ -66,6 +70,8 @@ export class StreamingFileService extends FileService {
   private progressService: ProgressService;
   private fileMetadataCache: Map<string, FileMetadata> = new Map();
   private fileContentCache: Map<string, FileCache> = new Map();
+  private incrementalUpdateService: IncrementalUpdateService;
+  private lastProcessedFiles: string[] = [];
 
   constructor(
     maxCacheSize: number = 50 * 1024 * 1024,
@@ -76,6 +82,7 @@ export class StreamingFileService extends FileService {
     this.fileCache = new CacheService<string>(maxCacheSize);
     this.maxParallelOperations = maxParallelOps;
     this.progressService = progressService || new ProgressService();
+    this.incrementalUpdateService = new IncrementalUpdateService();
   }
 
   private getMemoryStats(): MemoryStats {
@@ -284,9 +291,13 @@ export class StreamingFileService extends FileService {
       const content = await this.readFileWithStream(filePath);
       await this.updateFileCache(filePath, content);
       return content;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error reading file:', { error, filePath });
-      throw error;
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error('Failed to read file: ' + String(error));
+      }
     }
   }
 
@@ -653,5 +664,88 @@ export class StreamingFileService extends FileService {
     }
 
     return false;
+  }
+
+  async detectChanges(directoryPath: string): Promise<UpdateResult> {
+    return this.incrementalUpdateService.detectChanges(
+      directoryPath,
+      this.lastProcessedFiles,
+    );
+  }
+
+  async generateFileTreeIncremental(
+    directoryPath: string,
+    rootPath: string,
+    includeDotFolders: boolean,
+    options: ProcessingOptions,
+  ): Promise<string> {
+    const changes = await this.detectChanges(directoryPath);
+
+    // If no changes, return cached tree if available
+    const cachedTree = this.directoryCache.get(directoryPath);
+    if (
+      changes.changedFiles.length === 0 &&
+      changes.deletedFiles.length === 0 &&
+      changes.newFiles.length === 0 &&
+      cachedTree &&
+      cachedTree.includeDotFolders === includeDotFolders
+    ) {
+      return cachedTree.entries.length > 0
+        ? this.formatDirectoryEntries(cachedTree.entries, 0)
+        : '';
+    }
+
+    // Generate new tree
+    const tree = await this.generateFileTree(
+      directoryPath,
+      rootPath,
+      includeDotFolders,
+      options,
+    );
+
+    // Update last processed files
+    this.lastProcessedFiles =
+      await this.incrementalUpdateService.getAllFiles(directoryPath);
+
+    return tree;
+  }
+
+  async combineFilesIncremental(
+    rootPath: string,
+    directoryPath: string,
+    includeDotFolders: boolean,
+    options: ProcessingOptions,
+  ): Promise<string> {
+    const changes = await this.detectChanges(directoryPath);
+
+    // If no changes and we have a cache, return cached content
+    const cacheKey = `${directoryPath}_${includeDotFolders}`;
+    if (
+      changes.changedFiles.length === 0 &&
+      changes.deletedFiles.length === 0 &&
+      changes.newFiles.length === 0 &&
+      this.fileCache.has(cacheKey)
+    ) {
+      return this.fileCache.get(cacheKey) || '';
+    }
+
+    // Combine files with changes
+    const content = await this.combineFiles(
+      rootPath,
+      directoryPath,
+      includeDotFolders,
+      options,
+    );
+
+    // Update last processed files
+    this.lastProcessedFiles =
+      await this.incrementalUpdateService.getAllFiles(directoryPath);
+
+    return content;
+  }
+
+  clearIncrementalState(): void {
+    this.incrementalUpdateService.clearStates();
+    this.lastProcessedFiles = [];
   }
 }

@@ -24,6 +24,11 @@
   - [x] Add progress indicators for long-running operations
   - [x] Add unit tests for progress tracking
   - [x] Add E2E tests for progress reporting
+  - [x] Implement incremental updates
+    - [x] Design caching strategy
+    - [x] Implement change detection
+    - [x] Add partial update support
+    - [x] Add progress tracking for updates
 - [x] Fix StreamingFileService Tests
   - [x] Fix file tree generation test
   - [x] Fix cancellation handling

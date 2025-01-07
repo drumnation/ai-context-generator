@@ -1,5 +1,5 @@
 import * as path from 'path';
-import * as fsPromises from 'fs/promises';
+import { promises as fsPromises } from 'fs';
 import { Stats } from 'fs';
 import { Readable } from 'stream';
 import { FileService } from './fileService';
@@ -39,6 +39,18 @@ interface DirectoryCache {
   includeDotFolders: boolean;
 }
 
+interface FileMetadata {
+  mtime: Date;
+  size: number;
+  hash?: string;
+}
+
+interface FileCache {
+  content: string;
+  metadata: FileMetadata;
+  lastAccessed: number;
+}
+
 export class StreamingFileService extends FileService {
   private activeStreams: Map<string, FileStream> = new Map();
   private readonly maxConcurrentStreams = 5;
@@ -52,6 +64,8 @@ export class StreamingFileService extends FileService {
   private fileCache: CacheService<string>;
   private directoryCache: Map<string, DirectoryCache> = new Map();
   private progressService: ProgressService;
+  private fileMetadataCache: Map<string, FileMetadata> = new Map();
+  private fileContentCache: Map<string, FileCache> = new Map();
 
   constructor(
     maxCacheSize: number = 50 * 1024 * 1024,
@@ -204,10 +218,72 @@ export class StreamingFileService extends FileService {
     );
   }
 
-  // Override readFile to use streaming
+  private async getFileMetadata(filePath: string): Promise<FileMetadata> {
+    try {
+      const stats = await fsPromises.stat(filePath);
+      return {
+        mtime: stats.mtime,
+        size: stats.size,
+      };
+    } catch (error) {
+      logger.error('Error getting file metadata:', { error, filePath });
+      throw error;
+    }
+  }
+
+  private async hasFileChanged(filePath: string): Promise<boolean> {
+    try {
+      const currentMetadata = await this.getFileMetadata(filePath);
+      const cachedMetadata = this.fileMetadataCache.get(filePath);
+
+      if (!cachedMetadata) {
+        return true;
+      }
+
+      return (
+        currentMetadata.mtime.getTime() !== cachedMetadata.mtime.getTime() ||
+        currentMetadata.size !== cachedMetadata.size
+      );
+    } catch (error) {
+      logger.error('Error checking file changes:', { error, filePath });
+      return true; // Assume changed on error
+    }
+  }
+
+  private async updateFileCache(
+    filePath: string,
+    content: string,
+  ): Promise<void> {
+    try {
+      const metadata = await this.getFileMetadata(filePath);
+      this.fileMetadataCache.set(filePath, metadata);
+      this.fileContentCache.set(filePath, {
+        content,
+        metadata,
+        lastAccessed: Date.now(),
+      });
+    } catch (error) {
+      logger.error('Error updating file cache:', { error, filePath });
+      throw error;
+    }
+  }
+
   async readFile(filePath: string): Promise<string> {
     try {
-      return await this.readFileWithStream(filePath);
+      // Check cache first
+      const cached = this.fileContentCache.get(filePath);
+      if (cached) {
+        const hasChanged = await this.hasFileChanged(filePath);
+        if (!hasChanged) {
+          cached.lastAccessed = Date.now();
+          return cached.content;
+        }
+      }
+
+      // Read file and update cache
+      const content = await this.readFileWithStream(filePath);
+      await this.updateFileCache(filePath, content);
+      return content;
     } catch (error) {
       logger.error('Error reading file:', { error, filePath });
       throw error;
@@ -470,7 +546,6 @@ export class StreamingFileService extends FileService {
     }
   }
 
-  // Override the existing combineFiles method to use the optimized tree
   async combineFiles(
     rootPath: string,
     directoryPath: string,
@@ -484,53 +559,42 @@ export class StreamingFileService extends FileService {
         title: `Combining files in ${path.basename(directoryPath)}`,
         cancellable: true,
       },
-      async (
-        progress: vscode.Progress<{ message?: string; increment?: number }>,
-        token: vscode.CancellationToken,
-      ) => {
+      async (progress, token) => {
         try {
-          const entries = await fsPromises.readdir(directoryPath, {
-            withFileTypes: true,
-          });
-          const validEntries = entries.filter(
-            (entry) => !this.shouldSkip(entry.name, includeDotFolders),
+          const tree = await this.generateFileTree(
+            directoryPath,
+            rootPath,
+            includeDotFolders,
+            options,
           );
+          const entries = this.parseTreeToEntries(tree, 0, directoryPath);
+          const files = this.flattenEntries(entries);
 
-          let processedCount = 0;
           let combinedContent = '';
+          let processedFiles = 0;
 
-          for (const entry of validEntries) {
+          for (const file of files) {
             if (token.isCancellationRequested) {
-              break;
+              throw new Error('Operation cancelled');
             }
 
-            const fullPath = path.join(directoryPath, entry.name);
-            const relativePath = path.relative(rootPath, fullPath);
+            const hasChanged = await this.hasFileChanged(file.path);
+            const cached = this.fileContentCache.get(file.path);
 
-            if (entry.isDirectory()) {
-              const subContent = await this.combineFiles(
-                rootPath,
-                fullPath,
-                includeDotFolders,
-                options,
-              );
-              if (subContent) {
-                combinedContent += `\n// Directory: ${relativePath}\n${subContent}`;
-              }
+            let content: string;
+            if (!hasChanged && cached) {
+              content = cached.content;
             } else {
-              try {
-                const content = await this.readFileWithStream(fullPath);
-                combinedContent += `\n// File: ${relativePath}\n${content}\n`;
-              } catch (error) {
-                logger.error('Error reading file:', { error, fullPath });
-              }
+              content = await this.readFile(file.path);
             }
 
-            processedCount++;
+            combinedContent += content + '\n';
+            processedFiles++;
+
             this.progressService.updateProgress(taskId, {
-              current: processedCount,
-              total: validEntries.length,
-              message: `Combined ${processedCount} of ${validEntries.length} entries`,
+              current: processedFiles,
+              total: files.length,
+              message: `Processed ${processedFiles} of ${files.length} files`,
             });
           }
 
@@ -541,6 +605,18 @@ export class StreamingFileService extends FileService {
         }
       },
     );
+  }
+
+  private flattenEntries(entries: DirectoryEntry[]): { path: string }[] {
+    const files: { path: string }[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory) {
+        files.push({ path: entry.path });
+      } else if (entry.children) {
+        files.push(...this.flattenEntries(entry.children));
+      }
+    }
+    return files;
   }
 
   // For testing

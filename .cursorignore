@@ -1,0 +1,9 @@
+node_modules
+build
+dist
+out
+.vscode-test
+/temp
+.DS_Store
+storybook-static
+.nx

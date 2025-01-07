@@ -3,28 +3,17 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2020",
-    "lib": [
-      "ES2020",
-      "DOM"
-    ],
+    "outDir": "../../out/test",
+    "rootDir": "../",
     "sourceMap": true,
-    "rootDir": "..",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "types": [
-      "node",
-      "jest",
-      "vscode"
-    ],
-    "moduleResolution": "node"
+    "strict": true
   },
   "include": [
-    "./**/*",
-    "../**/__tests__/**/*",
+    ".",
+    "**/*.ts",
+    "**/*.test.ts",
     "../backend/**/*",
-    "../di/**/*",
-    "../test/**/*"
+    "../shared/**/*"
   ],
   "exclude": [
     "node_modules",

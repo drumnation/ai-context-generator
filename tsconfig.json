@@ -16,7 +16,8 @@
     "types": [
       "node",
       "jest",
-      "vscode"
+      "vscode",
+      "mocha"
     ],
     "moduleResolution": "node"
   },
@@ -27,8 +28,6 @@
     "node_modules",
     ".vscode-test",
     "out",
-    "dist",
-    "src/test",
-    "/rules"
+    "dist"
   ]
 }

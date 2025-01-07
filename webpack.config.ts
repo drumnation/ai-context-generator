@@ -9,7 +9,8 @@ const extensionConfig: webpack.Configuration = {
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "extension.js",
-    libraryTarget: "commonjs2"
+    libraryTarget: "commonjs2",
+    devtoolModuleFilenameTemplate: "../[resource-path]"
   },
   externals: {
     vscode: "commonjs vscode"
@@ -21,12 +22,22 @@ const extensionConfig: webpack.Configuration = {
     rules: [
       {
         test: /\.tsx?$/,
-        exclude: [/node_modules/, /\.test\.ts$/],
-        use: "ts-loader"
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: "ts-loader",
+            options: {
+              configFile: "tsconfig.json",
+              compilerOptions: {
+                sourceMap: true
+              }
+            }
+          }
+        ]
       }
     ]
   },
-  devtool: "nosources-source-map"
+  devtool: "source-map"
 };
 
 const webviewConfig: webpack.Configuration = {
@@ -46,15 +57,12 @@ const webviewConfig: webpack.Configuration = {
   plugins: [
     new webpack.DefinePlugin({
       "process.env": JSON.stringify({}),
-      "process.env.NODE_ENV": JSON.stringify(
-        process.env.NODE_ENV || "development"
-      ),
-      "process.env.NODE_DEBUG": JSON.stringify(process.env.NODE_DEBUG || "")
+      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "development")
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: "src/webview/toolkit.css", to: "toolkit.css" },
-        { from: "src/webview/webview.css", to: "webview.css" }
+        { from: "src/webview/webview.css", to: "webview.css" },
+        { from: "src/webview/toolkit.css", to: "toolkit.css" }
       ]
     })
   ],
@@ -63,15 +71,21 @@ const webviewConfig: webpack.Configuration = {
       {
         test: /\.tsx?$/,
         exclude: /node_modules/,
-        use: "ts-loader"
+        use: [
+          {
+            loader: "ts-loader",
+            options: {
+              configFile: "tsconfig.json"
+            }
+          }
+        ]
       },
       {
         test: /\.css$/,
         use: ["style-loader", "css-loader"]
       }
     ]
-  },
-  devtool: "nosources-source-map"
+  }
 };
 
 export default [extensionConfig, webviewConfig];

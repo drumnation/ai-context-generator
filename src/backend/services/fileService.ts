@@ -1,181 +1,174 @@
 import * as path from 'path';
-import * as fsP from 'fs/promises';
-import * as fs from 'fs';
-import { QueueService, ProcessingOptions } from './queueService';
+import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import { logger } from '../../shared/logger';
-
-interface FileItem {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-  isLast: boolean;
-  indent: string;
-}
+import { ProcessingOptions } from './queueService';
 
 export class FileService {
-  private queueService: QueueService;
+  private readonly excludedFolders = new Set([
+    'node_modules',
+    '.git',
+    'dist',
+    'build',
+    'coverage',
+  ]);
 
-  constructor() {
-    this.queueService = new QueueService();
-  }
+  private readonly excludedFiles = new Set([
+    '.DS_Store',
+    'Thumbs.db',
+    '.env',
+    '.env.local',
+  ]);
 
   async generateFileTree(
     directoryPath: string,
     rootPath: string,
     includeDotFolders: boolean,
-    options?: ProcessingOptions,
+    options: ProcessingOptions,
+    level = 0,
   ): Promise<string> {
-    const tree: string[] = [path.basename(directoryPath)];
-    const fileItems: FileItem[] = [];
+    try {
+      const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+      let tree = '';
 
-    // First pass: collect all file items
-    async function collectItems(
-      dir: string,
-      indent: string = '',
-    ): Promise<void> {
-      const files = await fsP.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (options.cancelToken?.isCancellationRequested) {
+          break;
+        }
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const isLast = i === files.length - 1;
+        const fullPath = path.join(directoryPath, entry.name);
 
-        if (
-          file.isDirectory() &&
-          (includeDotFolders ||
-            (!file.name.startsWith('.') &&
-              ![
-                'node_modules',
-                'dist',
-                'build',
-                'app/build',
-                'gradle',
-                '.gradle',
-                '.idea',
-                'android/.gradle',
-                '.m2',
-                '.mvn',
-              ].includes(file.name)))
-        ) {
-          fileItems.push({
-            path: path.join(dir, file.name),
-            name: file.name,
-            isDirectory: true,
-            isLast,
-            indent,
-          });
-          await collectItems(
-            path.join(dir, file.name),
-            indent + (isLast ? '    ' : '│   '),
+        if (this.shouldSkip(entry.name, includeDotFolders)) {
+          continue;
+        }
+
+        const prefix = '  '.repeat(level);
+        if (entry.isDirectory()) {
+          tree += `${prefix}${entry.name}/\n`;
+          const subtree = await this.generateFileTree(
+            fullPath,
+            rootPath,
+            includeDotFolders,
+            options,
+            level + 1,
           );
-        } else if (
-          file.isFile() &&
-          !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) &&
-          file.name !== 'package-lock.json'
-        ) {
-          fileItems.push({
-            path: path.join(dir, file.name),
-            name: file.name,
-            isDirectory: false,
-            isLast,
-            indent,
-          });
+          tree += subtree;
+        } else {
+          tree += `${prefix}${entry.name}\n`;
         }
       }
+
+      return tree;
+    } catch (error) {
+      logger.error('Error generating file tree:', { error, directoryPath });
+      throw error;
     }
-
-    await collectItems(directoryPath);
-
-    // Process items in chunks
-    if (options) {
-      await this.queueService.processChunked(
-        fileItems,
-        async (item) => {
-          const prefix = item.isLast ? '└── ' : '├── ';
-          tree.push(`${item.indent}${prefix}${item.name}`);
-          return true;
-        },
-        options,
-      );
-    } else {
-      // Fallback to synchronous processing if no options provided
-      fileItems.forEach((item) => {
-        const prefix = item.isLast ? '└── ' : '├── ';
-        tree.push(`${item.indent}${prefix}${item.name}`);
-      });
-    }
-
-    return tree.join('\n');
   }
 
   async combineFiles(
     rootPath: string,
     directoryPath: string,
     includeDotFolders: boolean,
-    options?: ProcessingOptions,
+    options: ProcessingOptions,
   ): Promise<string> {
-    const fileItems: { path: string; relativePath: string }[] = [];
-    let combinedContent = '';
+    try {
+      const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+      let combinedContent = '';
 
-    // First pass: collect all file paths
-    async function collectFiles(dir: string): Promise<void> {
-      const files = await fsP.readdir(dir, { withFileTypes: true });
-
-      for (const file of files) {
-        const fullPath = path.join(dir, file.name);
-
-        if (
-          file.isDirectory() &&
-          (includeDotFolders ||
-            (!file.name.startsWith('.') &&
-              !['node_modules', 'dist'].includes(file.name)))
-        ) {
-          await collectFiles(fullPath);
-        } else if (
-          file.isFile() &&
-          !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) &&
-          file.name !== 'package-lock.json'
-        ) {
-          fileItems.push({
-            path: fullPath,
-            relativePath: path.relative(rootPath, fullPath),
-          });
+      for (const entry of entries) {
+        if (options.cancelToken?.isCancellationRequested) {
+          break;
         }
-      }
-    }
 
-    await collectFiles(directoryPath);
+        if (this.shouldSkip(entry.name, includeDotFolders)) {
+          continue;
+        }
 
-    // Process files in chunks
-    if (options) {
-      const results = await this.queueService.processChunked(
-        fileItems,
-        async (item) => {
-          try {
-            const content = await fsP.readFile(item.path, 'utf-8');
-            const fileExtension = path.extname(item.path).substring(1);
-            return `\n\n# ./${item.relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
-          } catch (error) {
-            logger.error(`Error reading file ${item.path}:`, { error });
-            return '';
+        const fullPath = path.join(directoryPath, entry.name);
+        const relativePath = path.relative(rootPath, fullPath);
+
+        if (entry.isDirectory()) {
+          const subContent = await this.combineFiles(
+            rootPath,
+            fullPath,
+            includeDotFolders,
+            options,
+          );
+          if (subContent) {
+            combinedContent += `\n// Directory: ${relativePath}\n${subContent}`;
           }
-        },
-        options,
-      );
-      combinedContent = results.join('');
-    } else {
-      // Fallback to synchronous processing
-      for (const item of fileItems) {
-        try {
-          const content = await fsP.readFile(item.path, 'utf-8');
-          const fileExtension = path.extname(item.path).substring(1);
-          combinedContent += `\n\n# ./${item.relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
-        } catch (error) {
-          logger.error(`Error reading file ${item.path}:`, { error });
+        } else {
+          try {
+            const content = await fs.readFile(fullPath, 'utf-8');
+            combinedContent += `\n// File: ${relativePath}\n${content}\n`;
+          } catch (error) {
+            logger.error('Error reading file:', { error, fullPath });
+          }
         }
       }
-    }
 
-    return combinedContent;
+      return combinedContent;
+    } catch (error) {
+      logger.error('Error combining files:', { error, directoryPath });
+      throw error;
+    }
+  }
+
+  async readFile(filePath: string): Promise<string> {
+    try {
+      return await fs.readFile(filePath, 'utf-8');
+    } catch (error) {
+      logger.error('Error reading file:', { error, filePath });
+      throw error;
+    }
+  }
+
+  async countFiles(
+    directoryPath: string,
+    options: ProcessingOptions,
+  ): Promise<number> {
+    try {
+      const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+      let count = 0;
+
+      for (const entry of entries) {
+        if (options.cancelToken?.isCancellationRequested) {
+          break;
+        }
+
+        if (this.shouldSkip(entry.name, false)) {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          count += await this.countFiles(
+            path.join(directoryPath, entry.name),
+            options,
+          );
+        } else {
+          count++;
+        }
+      }
+
+      return count;
+    } catch (error) {
+      logger.error('Error counting files:', { error, directoryPath });
+      throw error;
+    }
+  }
+
+  async listDirectories(directoryPath: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+      return entries
+        .filter(
+          (entry) => entry.isDirectory() && !this.shouldSkip(entry.name, false),
+        )
+        .map((entry) => entry.name);
+    } catch (error) {
+      logger.error('Error listing directories:', { error, directoryPath });
+      throw error;
+    }
   }
 
   isLargeDirectory(dirPath: string): boolean {
@@ -184,11 +177,12 @@ export class FileService {
 
     function countFiles(dir: string): void {
       try {
-        const files = fs.readdirSync(dir);
+        const files = fsSync.readdirSync(dir);
         for (const file of files) {
           try {
             const filePath = path.join(dir, file);
-            if (fs.statSync(filePath).isDirectory()) {
+            const stat = fsSync.statSync(filePath);
+            if (stat.isDirectory()) {
               countFiles(filePath);
             } else {
               fileCount++;
@@ -213,5 +207,13 @@ export class FileService {
     } catch (error) {
       return false;
     }
+  }
+
+  private shouldSkip(name: string, includeDotFolders: boolean): boolean {
+    if (!includeDotFolders && name.startsWith('.')) {
+      return true;
+    }
+
+    return this.excludedFolders.has(name) || this.excludedFiles.has(name);
   }
 }

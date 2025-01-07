@@ -19,7 +19,11 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:ai-pack.generateMarkdown",
+    "onCommand:ai-pack.generateMarkdownRoot"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -60,7 +64,9 @@
     "test": "jest --config jest.config.js",
     "test:watch": "jest --config jest.config.js --watch",
     "vsc-package": "npm run build && vsce package",
-    "publish": "npm run package && vsce publish --pat $VSCPAT"
+    "publish": "npm run package && vsce publish --pat $VSCPAT",
+    "test:e2e": "node ./out/test/runTest.js",
+    "pretest:e2e": "yarn run compile-tests && yarn run compile"
   },
   "devDependencies": {
     "@nx/eslint": "19.5.1",
@@ -68,7 +74,7 @@
     "@types/chai": "^4.3.16",
     "@types/glob": "^8.1.0",
     "@types/jest": "^29.5.14",
-    "@types/mocha": "^10.0.7",
+    "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -79,7 +85,7 @@
     "@typescript-eslint/parser": "^7.16.1",
     "@vitejs/plugin-react": "^4.3.1",
     "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0",
+    "@vscode/test-electron": "^2.4.1",
     "chai": "^5.1.1",
     "copy-webpack-plugin": "^12.0.2",
     "cpy-cli": "^5.0.0",
@@ -91,7 +97,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^11.0.0",
     "jest": "^29.7.0",
-    "mocha": "^10.7.0",
+    "mocha": "^10.8.2",
     "npm-run-all": "^4.1.5",
     "nx": "19.5.1",
     "prettier": "^3.3.3",

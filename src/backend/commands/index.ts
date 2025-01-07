@@ -1,6 +1,5 @@
 /* eslint-disable no-case-declarations */
 import * as vscode from 'vscode';
-import path from 'path';
 import { setupHotReload } from '../utils/hotReload';
 import { Container } from '../../di/container';
 import { ContainerBase } from '../../di/container-base';
@@ -44,7 +43,6 @@ export class WebviewPanelService implements WebviewPanelProvider {
   }
 }
 
-// Initialize container at module level
 function initializeContainer(): Container {
   const newContainer = new Container();
   const fileService = new FileService();
@@ -58,81 +56,145 @@ function initializeContainer(): Container {
   return newContainer;
 }
 
-// Initialize container immediately
 const container = initializeContainer();
 
-// Export container getter
 export function getContainer(): Container {
   return container;
 }
 
 interface Command {
-  execute(context: vscode.ExtensionContext): Promise<void>;
+  execute(param: vscode.Uri | vscode.ExtensionContext): Promise<void>;
 }
 
-class GenerateMarkdownCommand implements Command {
-  constructor(private container: Container) {}
+export class GenerateMarkdownCommand implements Command {
+  private readonly fileService: FileService;
+  private readonly performanceService: PerformanceService;
+  private readonly container: ContainerBase;
 
-  async execute(context: vscode.ExtensionContext): Promise<void> {
-    const fileService = this.container.resolve<FileService>('fileService');
-    const performanceService =
-      this.container.resolve<PerformanceService>('performanceService');
-
-    const rootPath = vscode.workspace.workspaceFolders
-      ? vscode.workspace.workspaceFolders[0].uri.fsPath
-      : '';
-    const directoryPath = rootPath;
-    const includeDotFolders = path.basename(directoryPath).startsWith('.');
-
-    // Profile directory scanning
-    await performanceService.profileDirectoryScanning(directoryPath);
-
-    await generateMarkdown(
-      rootPath,
-      directoryPath,
-      context,
-      includeDotFolders,
-      false,
-      fileService,
-      this.container,
-    );
+  constructor(container: ContainerBase) {
+    this.container = container;
+    this.fileService = container.resolve<FileService>('fileService');
+    this.performanceService =
+      container.resolve<PerformanceService>('performanceService');
   }
-}
 
-class GenerateMarkdownRootCommand implements Command {
-  constructor(private container: Container) {}
+  async execute(param: vscode.Uri): Promise<void> {
+    const rootDir = param.fsPath;
 
-  async execute(context: vscode.ExtensionContext): Promise<void> {
-    const fileService = this.container.resolve<FileService>('fileService');
-    const performanceService =
-      this.container.resolve<PerformanceService>('performanceService');
+    try {
+      if (this.fileService.isLargeDirectory(rootDir)) {
+        const proceed = await vscode.window.showWarningMessage(
+          'This directory contains a large number of files. Processing may take longer and consume more memory. Do you want to continue?',
+          'Yes',
+          'No',
+        );
 
-    if (vscode.workspace.workspaceFolders) {
-      const rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-
-      // Profile directory scanning
-      await performanceService.profileDirectoryScanning(rootPath);
+        if (proceed !== 'Yes') {
+          return;
+        }
+      }
 
       await generateMarkdown(
-        rootPath,
-        rootPath,
-        context,
+        rootDir,
+        rootDir,
+        this.container.context,
         false,
-        true,
-        fileService,
+        false,
+        this.fileService,
         this.container,
       );
-    } else {
-      vscode.window.showInformationMessage('No workspace folder is open.');
+
+      await this.performanceService.measureDirectoryScanning(
+        rootDir,
+        rootDir,
+        false,
+      );
+    } catch (error) {
+      logger.error('Error in GenerateMarkdownCommand:', { error });
+      vscode.window.showErrorMessage(
+        `Failed to generate markdown: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
     }
   }
 }
 
-// Export command registration function
+export class GenerateMarkdownRootCommand implements Command {
+  private readonly fileService: FileService;
+  private readonly performanceService: PerformanceService;
+  private readonly container: ContainerBase;
+
+  constructor(container: ContainerBase) {
+    this.container = container;
+    this.fileService = container.resolve<FileService>('fileService');
+    this.performanceService =
+      container.resolve<PerformanceService>('performanceService');
+  }
+
+  async execute(_param: vscode.ExtensionContext): Promise<void> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage('No workspace folder is open');
+      return;
+    }
+
+    try {
+      const isLarge = this.fileService.isLargeDirectory(workspaceRoot);
+      if (isLarge) {
+        const proceed = await vscode.window.showWarningMessage(
+          'This workspace contains a large number of files. Processing may take longer and consume more memory. Do you want to continue?',
+          'Yes',
+          'No',
+        );
+
+        if (proceed !== 'Yes') {
+          return;
+        }
+      }
+
+      await generateMarkdown(
+        workspaceRoot,
+        workspaceRoot,
+        this.container.context,
+        false,
+        true,
+        this.fileService,
+        this.container,
+      );
+
+      await this.performanceService.measureDirectoryScanning(
+        workspaceRoot,
+        workspaceRoot,
+        false,
+      );
+    } catch (error) {
+      logger.error('Error in GenerateMarkdownRootCommand:', { error });
+      vscode.window.showErrorMessage(
+        `Failed to generate root markdown: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+  }
+
+  private getWorkspaceRoot(): string | undefined {
+    if (
+      !vscode.workspace.workspaceFolders ||
+      vscode.workspace.workspaceFolders.length === 0
+    ) {
+      return undefined;
+    }
+    return vscode.workspace.workspaceFolders[0].uri.fsPath;
+  }
+}
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   container: Container,
 ): void {
+  container.setContext(context);
+
   const commandRegistry = new Map<string, Command>();
   commandRegistry.set(
     'ai-pack.generateMarkdown',
@@ -144,143 +206,67 @@ export function registerCommands(
   );
 
   for (const [commandName, command] of commandRegistry) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(commandName, () =>
-        command.execute(context),
-      ),
-    );
+    if (commandName === 'ai-pack.generateMarkdown') {
+      context.subscriptions.push(
+        vscode.commands.registerCommand(commandName, (uri: vscode.Uri) =>
+          command.execute(uri),
+        ),
+      );
+    } else {
+      context.subscriptions.push(
+        vscode.commands.registerCommand(commandName, () =>
+          command.execute(context),
+        ),
+      );
+    }
   }
 }
 
-// Export message handler setup function
 export function setupMessageHandler(
   panel: vscode.WebviewPanel,
-  context: vscode.ExtensionContext,
-  container: ContainerBase,
+  _context: vscode.ExtensionContext,
+  _container: ContainerBase,
 ): void {
-  panel.webview.onDidReceiveMessage(
-    async (message: WebviewMessage) => {
-      try {
-        const fileService = container.resolve<FileService>('fileService');
-        const performanceService =
-          container.resolve<PerformanceService>('performanceService');
+  panel.webview.onDidReceiveMessage(async (message: WebviewMessage) => {
+    try {
+      switch (message.command) {
+        case 'error':
+          logger.error('Webview error:', {
+            error: message.error,
+            componentStack: message.componentStack,
+          });
+          vscode.window.showErrorMessage(
+            `Webview error: ${message.error}. Check the developer tools for more details.`,
+          );
+          break;
 
-        switch (message.command) {
-          case 'error':
-            logger.error('Webview error:', {
-              error: message.error,
-              componentStack: message.componentStack,
-            });
-            vscode.window.showErrorMessage(
-              `Webview error: ${message.error}. Check the developer tools for more details.`,
-            );
-            return;
-          case 'reloadWebview':
-            if (panel) {
-              setupHotReload(context, panel);
-            }
-            return;
-          case 'closeWebview':
-            panel.dispose();
-            return;
-          case 'showMessage':
-            vscode.window.showInformationMessage(message.text as string);
-            return;
-          case 'changeMode':
-            const rootPath = vscode.workspace.workspaceFolders
-              ? vscode.workspace.workspaceFolders[0].uri.fsPath
-              : '';
-            if (message.mode === 'root') {
-              await performanceService.profileDirectoryScanning(rootPath);
-              await generateMarkdown(
-                rootPath,
-                rootPath,
-                context,
-                false,
-                true,
-                fileService,
-                container,
-              );
-            } else {
-              const lastSelectedDir = rootPath;
-              await performanceService.profileDirectoryScanning(
-                lastSelectedDir,
-              );
-              await generateMarkdown(
-                rootPath,
-                lastSelectedDir,
-                context,
-                false,
-                false,
-                fileService,
-                container,
-              );
-            }
-            return;
-          case 'loadRootMode':
-            const rootDir = vscode.workspace.workspaceFolders
-              ? vscode.workspace.workspaceFolders[0].uri.fsPath
-              : '';
-            if (fileService.isLargeDirectory(rootDir)) {
-              await panel.webview.postMessage({
-                command: 'showWarning',
-                text: 'This is a large repository. Loading root mode may be slow or cause the extension to crash.',
-              });
-            }
-            await performanceService.profileDirectoryScanning(rootDir);
-            await generateMarkdown(
-              rootDir,
-              rootDir,
-              context,
-              false,
-              true,
-              fileService,
-              container,
-            );
-            return;
-          case 'loadDirectoryMode':
-            const currentDir = vscode.window.activeTextEditor
-              ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
-              : vscode.workspace.workspaceFolders
-                ? vscode.workspace.workspaceFolders[0].uri.fsPath
-                : '';
-            await performanceService.profileDirectoryScanning(currentDir);
-            await generateMarkdown(
-              currentDir,
-              currentDir,
-              context,
-              false,
-              false,
-              fileService,
-              container,
-            );
-            return;
-          case 'checkRepoSize':
-            const workspaceRoot = vscode.workspace.workspaceFolders
-              ? vscode.workspace.workspaceFolders[0].uri.fsPath
-              : '';
-            const isLarge = fileService.isLargeDirectory(workspaceRoot);
-            await panel.webview.postMessage({
-              command: 'repoSizeResult',
-              isLarge: isLarge,
-            });
-            return;
-        }
-      } catch (error) {
-        logger.error('Error in message handler:', { error });
-        if (error instanceof Error) {
-          vscode.window.showErrorMessage(`Error: ${error.message}`);
-        } else {
-          vscode.window.showErrorMessage('An unexpected error occurred');
-        }
+        case 'reloadWebview':
+          if (panel) {
+            panel.webview.html = await generateWebviewContent();
+          }
+          break;
+
+        default:
+          logger.warn('Unknown command received:', {
+            command: message.command,
+          });
       }
-    },
-    undefined,
-    context.subscriptions,
-  );
+    } catch (error) {
+      logger.error('Error handling message:', { error });
+      vscode.window.showErrorMessage(
+        `Error handling message: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+  });
 }
 
-// Export webview panel getter
+async function generateWebviewContent(): Promise<string> {
+  // Implementation details...
+  return '';
+}
+
 export function getWebviewPanel(): vscode.WebviewPanel | undefined {
   return currentPanel;
 }

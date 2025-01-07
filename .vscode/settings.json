@@ -13,6 +13,7 @@
     "tab.inactiveBackground": "#5A0E0E",
     "tab.inactiveForeground": "#E1E1E1"
   },
+  "markdown.validate.enabled": false,
   "files.exclude": {
     "out": false,
     "dist": false
@@ -57,7 +58,6 @@
   "editor.formatOnPaste": true,
   "editor.formatOnSaveMode": "file",
   "files.autoSave": "onFocusChange",
-  "vs-code-prettier-eslint.prettierLast": false,
   "prettier.trailingComma": "all",
   "eslint.validate": [
     "javascript",

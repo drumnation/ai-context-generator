@@ -1,8 +1,10 @@
+import * as vscode from 'vscode';
 import { ContainerBase } from './container-base';
 import { ServiceMap } from './types';
 
 export class Container implements ContainerBase {
   private services: Map<keyof ServiceMap | string, unknown> = new Map();
+  public context!: vscode.ExtensionContext;
 
   register<K extends keyof ServiceMap>(name: K, service: ServiceMap[K]): void;
   register<T>(name: string, service: T): void;
@@ -18,5 +20,9 @@ export class Container implements ContainerBase {
       throw new Error(`Service '${name}' not found in container`);
     }
     return service;
+  }
+
+  setContext(context: vscode.ExtensionContext): void {
+    this.context = context;
   }
 }

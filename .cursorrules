@@ -3,87 +3,157 @@
     "context_initialization": {
       "description": "Starting point for each interaction",
       "steps": [
-        "ALWAYS read `.notes/project-overview.md` and `.notes/task-list.md`"
+        "Read .notes/project-overview.md",
+        "Read .notes/code-standards.md",
+        "Read .notes/testing-standards.md when writing tests",
+        "Read .notes/refactoring-guidelines.md when refactoring"
       ]
     },
-    "operational_protocol": {
-      "description": "How to approach tasks",
-      "before_action": [
-        "Create a MECE task breakdown"
+    "coding_standards": {
+      "description": "Core coding standards and TypeScript requirements",
+      "typescript": {
+        "description": "TypeScript-specific requirements",
+        "rules": [
+          "Strict mode enabled",
+          "No 'any' - use 'unknown'",
+          "Readonly/immutable types preferred",
+          "Type guards over assertions",
+          "Exhaustive checks with 'never'",
+          "Generics for reusable code"
+        ]
+      },
+      "naming": {
+        "description": "Naming conventions",
+        "rules": {
+          "PascalCase": [
+            "Components",
+            "Types",
+            "Interfaces"
+          ],
+          "camelCase": [
+            "Variables",
+            "Functions"
+          ],
+          "UPPER_CASE": [
+            "Constants"
+          ],
+          "kebab-case": [
+            "Files"
+          ]
+        }
+      },
+      "component_structure": {
+        "description": "Standard component folder structure",
+        "template": {
+          "base": "./components/{ComponentName}/",
+          "files": [
+            "{ComponentName}.tsx",
+            "{ComponentName}.types.ts",
+            "{ComponentName}.styles.ts",
+            "{ComponentName}.hook.ts",
+            "{ComponentName}.logic.ts",
+            "components/",
+            "components/index.ts",
+            "index.ts"
+          ]
+        }
+      }
+    },
+    "refactoring": {
+      "description": "Guidelines for code refactoring",
+      "principles": [
+        "KISS (Keep It Simple, Stupid)",
+        "YAGNI (You Aren't Gonna Need It)",
+        "SOLID Principles",
+        "DRY (Don't Repeat Yourself)"
       ],
-      "code_changes": [
-        "Read relevant code sections before editing",
-        "Preserve existing functionality",
-        "Maintain type safety"
-      ]
-    },
-    "safety_requirements": [
-      "NEVER break type safety",
-      "ALWAYS maintain proper error handling",
-      "ALWAYS document new code"
-    ],
-    "priorities": [
-      {
-        "source": ".notes/",
-        "weight": 1.0
+      "process": {
+        "analysis": {
+          "description": "Initial analysis phase",
+          "steps": [
+            "Review component purpose and functionality",
+            "Identify code smells and technical debt",
+            "Document current behavior for testing"
+          ]
+        },
+        "component_structure": {
+          "description": "Component restructuring",
+          "steps": [
+            "Extract inline functions to handlers",
+            "Move complex logic to .logic.ts",
+            "Create subcomponents for reusable pieces",
+            "Use hooks for stateful logic",
+            "Follow component folder structure"
+          ]
+        },
+        "error_handling": {
+          "description": "Error handling implementation",
+          "steps": [
+            "Implement error boundaries",
+            "Add try-catch for async operations",
+            "Provide user feedback",
+            "Set up logging mechanisms"
+          ]
+        }
       }
-    ],
-    "modes": {
-      "base": {
-        "description": "For common, everyday coding tasks within the extension project.",
-        "directives": [
-          "Focus on code completion and basic refactoring.",
-          "Maintain existing code style and conventions.",
-          "Prioritize speed and efficiency for simple tasks."
-        ]
+    },
+    "testing": {
+      "description": "Testing standards and practices",
+      "framework": {
+        "unit": "Jest",
+        "e2e": "Mocha"
       },
-      "enhanced": {
-        "description": "For complex problems"
-      },
-      "extension_development": {
-        "description": "For general extension development tasks, such as feature implementation and bug fixes.",
-        "directives": [
-          "Focus on VS Code API usage.",
-          "Prioritize user experience and performance.",
-          "Adhere to VS Code extension guidelines."
-        ]
-      },
-      "ui_development": {
-        "description": "For tasks related to the user interface of the extension.",
-        "directives": [
-          "Focus on creating a clean and intuitive UI.",
-          "Use VS Code's UI components and patterns.",
-          "Ensure accessibility and responsiveness."
-        ]
-      },
-      "testing": {
-        "description": "For writing and running tests for the extension.",
-        "directives": [
-          "Write comprehensive unit and integration tests.",
-          "Use Jest for testing.",
-          "Ensure high test coverage."
-        ]
-      },
-      "debugging": {
-        "description": "For debugging issues in the extension.",
-        "directives": [
-          "Use VS Code's debugging tools.",
-          "Focus on identifying and fixing root causes.",
-          "Test fixes thoroughly."
-        ]
-      },
-      "packaging": {
-        "description": "For tasks related to packaging and publishing the extension.",
-        "directives": [
-          "Follow VS Code's packaging guidelines.",
-          "Ensure the extension is properly configured.",
-          "Prepare for publishing to the VS Code Marketplace."
+      "best_practices": [
+        "Avoid excessive mocking - test real behavior when possible",
+        "Test critical functionality",
+        "Use realistic test cases",
+        "Ensure reliable verification",
+        "Minimize test brittleness",
+        "Keep tests simple and maintainable",
+        "Follow Jest format"
+      ],
+      "coverage": {
+        "focus_areas": [
+          "Complex logic",
+          "Edge cases",
+          "Error conditions",
+          "Expected behavior"
         ]
       }
     },
-    "project_directives": {
-      "name": "ai-context-generator",
-      "ai_first": true
+    "vscode_extension": {
+      "description": "VSCode Extension Development Rules and Best Practices",
+      "source": "rules/vscode-extension.rules.ts",
+      "sections": {
+        "project_structure": {
+          "description": "Project organization and file layout",
+          "reference": "VSCodeExtensionPatterns.projectStructure"
+        },
+        "activation": {
+          "description": "Extension activation events and lifecycle",
+          "reference": "VSCodeExtensionPatterns.activationLifecycle"
+        },
+        "commands": {
+          "description": "Command registration and implementation",
+          "reference": "VSCodeExtensionPatterns.commandsContext"
+        },
+        "testing": {
+          "description": "Extension testing guidelines",
+          "reference": "VSCodeExtensionPatterns.extensionTesting"
+        },
+        "publishing": {
+          "description": "Publishing and marketplace guidelines",
+          "reference": "VSCodeExtensionPatterns.publishingMarketplace"
+        },
+        "performance": {
+          "description": "Performance optimization guidelines",
+          "reference": "VSCodeExtensionPatterns.performance"
+        },
+        "logging": {
+          "description": "Logging and error handling patterns",
+          "reference": "VSCodeExtensionPatterns.loggingErrorHandling"
+        }
+      }
     }
   }
 }

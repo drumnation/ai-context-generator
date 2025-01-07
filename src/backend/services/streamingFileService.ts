@@ -310,6 +310,11 @@ export class StreamingFileService extends FileService {
         token: vscode.CancellationToken,
       ) => {
         try {
+          // Check current directory contents
+          const currentEntries = await fsPromises.readdir(directoryPath, {
+            withFileTypes: true,
+          });
+
           // Check cache first
           const cachedTree = this.directoryCache.get(directoryPath);
           if (
@@ -317,19 +322,26 @@ export class StreamingFileService extends FileService {
             Date.now() - cachedTree.timestamp < this.TREE_CACHE_TTL &&
             cachedTree.includeDotFolders === includeDotFolders
           ) {
-            this.progressService.updateProgress(taskId, {
-              message: 'Using cached file tree',
-              current: 100,
-              total: 100,
-            });
-            return this.formatDirectoryEntries(cachedTree.entries, level);
+            // Compare current entries with cached entries to detect changes
+            const cachedNames = new Set(cachedTree.entries.map((e) => e.name));
+            const currentNames = new Set(currentEntries.map((e) => e.name));
+
+            // If any files were added or removed, invalidate cache
+            const hasChanges =
+              Array.from(currentNames).some((name) => !cachedNames.has(name)) ||
+              Array.from(cachedNames).some((name) => !currentNames.has(name));
+
+            if (!hasChanges) {
+              this.progressService.updateProgress(taskId, {
+                message: 'Using cached file tree',
+                current: 100,
+                total: 100,
+              });
+              return this.formatDirectoryEntries(cachedTree.entries, level);
+            }
           }
 
-          const entries = await fsPromises.readdir(directoryPath, {
-            withFileTypes: true,
-          });
-
-          const validEntries = entries.filter(
+          const validEntries = currentEntries.filter(
             (entry) => !this.shouldSkip(entry.name, includeDotFolders),
           );
 
@@ -594,7 +606,7 @@ export class StreamingFileService extends FileService {
             this.progressService.updateProgress(taskId, {
               current: processedFiles,
               total: files.length,
-              message: `Processed ${processedFiles} of ${files.length} files`,
+              message: `Combined ${processedFiles} of ${files.length} files`,
             });
           }
 
@@ -622,5 +634,24 @@ export class StreamingFileService extends FileService {
   // For testing
   getCacheStats() {
     return this.fileCache.getStats();
+  }
+
+  protected shouldSkip(name: string, includeDotFolders: boolean): boolean {
+    // Always skip node_modules and dist directories
+    if (name === 'node_modules' || name === 'dist') {
+      return true;
+    }
+
+    // Skip dot folders/files unless explicitly included
+    if (!includeDotFolders && (name.startsWith('.') || name === '.git')) {
+      return true;
+    }
+
+    // Always skip .git directory regardless of includeDotFolders setting
+    if (name === '.git') {
+      return true;
+    }
+
+    return false;
   }
 }

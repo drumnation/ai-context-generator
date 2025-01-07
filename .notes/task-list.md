@@ -41,18 +41,18 @@
   - [x] Optimize test data sizes
   - [x] Improve memory thresholds
   - [x] Remove implementation-specific tests
+- [x] Apply StreamingFileService test improvements to other files
+  - [x] Review mock patterns
+  - [x] Fix type safety issues
+  - [x] Improve error handling
+  - [x] Update progress tracking
+  - [x] Optimize test data sizes
+  - [x] Adjust memory thresholds
+  - [x] Remove implementation details from tests
 
 ## In Progress
 
 ### Testing Infrastructure Improvements
-- [ ] Apply StreamingFileService test improvements to other files
-  - [ ] Review mock patterns
-  - [ ] Fix type safety issues
-  - [ ] Improve error handling
-  - [ ] Update progress tracking
-  - [ ] Optimize test data sizes
-  - [ ] Adjust memory thresholds
-  - [ ] Remove implementation details from tests
 - [ ] Document test patterns and best practices
   - [ ] Mock implementation strategies
   - [ ] Type safety guidelines
@@ -113,66 +113,3 @@
 - [ ] Add support for multiple workspace folders
 - [ ] Implement file change watching
 - [ ] Add support for custom file processors
-
-## Testing
-- [x] Fix progress tracking tests
-  - [x] Fix file tree generation test
-  - [x] Fix file combining test
-  - [x] Fix cancellation test
-- [ ] Review and fix other test files
-  - [ ] Check for similar mock file system issues
-  - [ ] Verify cancellation handling
-  - [ ] Update progress tracking expectations
-  - [ ] Optimize test data sizes
-  - [ ] Adjust memory thresholds
-- [ ] Improve test infrastructure
-  - [ ] Extract common mock file system setup
-  - [ ] Document mock patterns and best practices
-  - [ ] Add test utilities for common operations
-  - [ ] Add memory usage monitoring utilities
-
-## Documentation
-- [ ] Update mock file system documentation
-  - [ ] Document directory handling
-  - [ ] Document file content handling
-  - [ ] Add examples for common test scenarios
-  - [ ] Document memory usage patterns
-- [ ] Document progress tracking patterns
-  - [ ] Explain progress reporting flow
-  - [ ] Document cancellation handling
-  - [ ] Add examples for different operation types
-- [ ] Add performance optimization guide
-  - [ ] Document test data size guidelines
-  - [ ] Explain memory threshold calculations
-  - [ ] Add benchmark setup instructions
-
-## Code Quality
-- [ ] Extract common test setup code
-- [ ] Add type safety improvements
-- [ ] Review error handling patterns
-- [ ] Consider performance optimizations
-- [ ] Add automated performance regression checks
-
-### Performance Testing
-- [ ] Add performance benchmarks for incremental updates
-  - [ ] Define benchmark metrics
-  - [ ] Create baseline measurements
-  - [ ] Test with large directories
-  - [ ] Measure memory usage
-- [ ] Implement stress tests
-  - [ ] Define test scenarios
-  - [ ] Create test data generators
-  - [ ] Add monitoring
-  - [ ] Document results
-
-### Documentation
-- [ ] Document incremental update system
-  - [ ] Configuration options
-  - [ ] Change detection strategy
-  - [ ] State management
-  - [ ] Best practices
-- [ ] Create troubleshooting guide
-  - [ ] Common issues
-  - [ ] Solutions
-  - [ ] Performance tips
-  - [ ] Examples

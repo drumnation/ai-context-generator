@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { IncrementalUpdateService } from '../../backend/services/incrementalUpdateService';
-import { createTempDir, delay, removeTempDir } from '../testUtils';
+import { createTempDir, delay, removeTempDir } from '../../test/testUtils';
 
 describe('IncrementalUpdateService E2E', () => {
   let service: IncrementalUpdateService;

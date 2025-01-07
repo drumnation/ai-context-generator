@@ -2,6 +2,8 @@ import { FileMetadata } from './streamingFileService';
 import { logger } from '../../shared/logger';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
+import { ProgressService } from './progressService';
+import { ProcessingOptions } from './queueService';
 
 export interface UpdateResult {
   changedFiles: string[];
@@ -17,66 +19,124 @@ export interface FileState {
 export class IncrementalUpdateService {
   private fileStates: Map<string, FileState> = new Map();
   private readonly stateValidityDuration = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly progressService: ProgressService;
 
-  constructor() {}
+  constructor(progressService?: ProgressService) {
+    this.progressService = progressService || new ProgressService();
+  }
 
   async detectChanges(
     directoryPath: string,
     previousFiles: string[],
+    options?: ProcessingOptions,
   ): Promise<UpdateResult> {
-    const result: UpdateResult = {
-      changedFiles: [],
-      deletedFiles: [],
-      newFiles: [],
-    };
+    const taskId = `detect-changes-${Date.now()}`;
+    return this.progressService.withProgress(
+      taskId,
+      {
+        title: 'Detecting file changes',
+        cancellable: true,
+      },
+      async (progress, token) => {
+        const result: UpdateResult = {
+          changedFiles: [],
+          deletedFiles: [],
+          newFiles: [],
+        };
 
-    try {
-      // Get current files in directory
-      const currentFiles = await this.getAllFiles(directoryPath);
-      const currentFilePaths = new Set(currentFiles);
-      const previousFilePaths = new Set(previousFiles);
+        try {
+          if (token?.isCancellationRequested) {
+            return result;
+          }
 
-      // Find deleted files and remove their states
-      result.deletedFiles = previousFiles.filter((file) => {
-        const deleted = !currentFilePaths.has(file);
-        if (deleted) {
-          this.fileStates.delete(file);
+          // Get current files in directory
+          const currentFiles = await this.getAllFiles(directoryPath);
+          const currentFilePaths = new Set(currentFiles);
+          const previousFilePaths = new Set(previousFiles);
+
+          progress.report({
+            message: 'Checking for deleted files...',
+            increment: 20,
+          });
+
+          // Find deleted files and remove their states
+          result.deletedFiles = previousFiles.filter((file) => {
+            const deleted = !currentFilePaths.has(file);
+            if (deleted) {
+              this.fileStates.delete(file);
+            }
+            return deleted;
+          });
+
+          if (token?.isCancellationRequested) {
+            return result;
+          }
+
+          progress.report({ message: 'Processing files...', increment: 30 });
+
+          // Process files in chunks if specified
+          const chunkSize = options?.chunkSize || currentFiles.length;
+          const chunks = [];
+          for (let i = 0; i < currentFiles.length; i += chunkSize) {
+            chunks.push(currentFiles.slice(i, i + chunkSize));
+          }
+
+          // Process each chunk
+          for (const [index, chunk] of chunks.entries()) {
+            if (token?.isCancellationRequested) {
+              return result;
+            }
+
+            progress.report({
+              message: `Processing chunk ${index + 1}/${chunks.length}...`,
+              increment: 40 / chunks.length,
+            });
+
+            await Promise.all(
+              chunk.map(async (filePath) => {
+                if (!previousFilePaths.has(filePath)) {
+                  // New file - initialize its state without marking as changed
+                  await this.initializeFileState(filePath);
+                  result.newFiles.push(filePath);
+                  return;
+                }
+
+                // Check if existing file changed
+                const hasChanged = await this.checkFileChanged(filePath);
+                if (hasChanged) {
+                  result.changedFiles.push(filePath);
+                }
+              }),
+            );
+
+            // Add delay between chunks if specified
+            if (options?.delayBetweenChunks && index < chunks.length - 1) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, options.delayBetweenChunks),
+              );
+            }
+          }
+
+          progress.report({ message: 'Finalizing...', increment: 10 });
+
+          logger.info('Detected file changes', {
+            changed: result.changedFiles.length,
+            deleted: result.deletedFiles.length,
+            new: result.newFiles.length,
+          });
+
+          return result;
+        } catch (error: unknown) {
+          logger.error('Error detecting changes:', { error, directoryPath });
+          // Convert unknown error to Error instance
+          if (error instanceof Error) {
+            throw error;
+          } else {
+            throw new Error('Failed to detect changes: ' + String(error));
+          }
         }
-        return deleted;
-      });
-
-      // Check each current file
-      for (const filePath of currentFiles) {
-        if (!previousFilePaths.has(filePath)) {
-          // New file - initialize its state without marking as changed
-          await this.initializeFileState(filePath);
-          result.newFiles.push(filePath);
-          continue;
-        }
-
-        // Check if existing file changed
-        const hasChanged = await this.checkFileChanged(filePath);
-        if (hasChanged) {
-          result.changedFiles.push(filePath);
-        }
-      }
-
-      logger.info('Detected file changes', {
-        changed: result.changedFiles.length,
-        deleted: result.deletedFiles.length,
-        new: result.newFiles.length,
-      });
-
-      return result;
-    } catch (error: unknown) {
-      logger.error('Error detecting changes:', { error, directoryPath });
-      // Convert unknown error to Error instance
-      if (error instanceof Error) {
-        throw error;
-      } else {
-        throw new Error('Failed to detect changes: ' + String(error));
-      }
-    }
+      },
+    );
   }
 
   async getAllFiles(

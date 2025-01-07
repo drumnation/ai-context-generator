@@ -1,22 +1,43 @@
 import * as path from 'path';
 import * as fsP from 'fs/promises';
 import * as fs from 'fs';
+import { QueueService, ProcessingOptions } from './queueService';
+import { logger } from '../../shared/logger';
+
+interface FileItem {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  isLast: boolean;
+  indent: string;
+}
 
 export class FileService {
+  private queueService: QueueService;
+
+  constructor() {
+    this.queueService = new QueueService();
+  }
+
   async generateFileTree(
     directoryPath: string,
     rootPath: string,
     includeDotFolders: boolean,
+    options?: ProcessingOptions,
   ): Promise<string> {
     const tree: string[] = [path.basename(directoryPath)];
+    const fileItems: FileItem[] = [];
 
-    async function traverse(dir: string, indent: string = ''): Promise<void> {
+    // First pass: collect all file items
+    async function collectItems(
+      dir: string,
+      indent: string = '',
+    ): Promise<void> {
       const files = await fsP.readdir(dir, { withFileTypes: true });
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const isLast = i === files.length - 1;
-        const prefix = isLast ? '└── ' : '├── ';
 
         if (
           file.isDirectory() &&
@@ -35,8 +56,14 @@ export class FileService {
                 '.mvn',
               ].includes(file.name)))
         ) {
-          tree.push(`${indent}${prefix}${file.name}`);
-          await traverse(
+          fileItems.push({
+            path: path.join(dir, file.name),
+            name: file.name,
+            isDirectory: true,
+            isLast,
+            indent,
+          });
+          await collectItems(
             path.join(dir, file.name),
             indent + (isLast ? '    ' : '│   '),
           );
@@ -45,12 +72,38 @@ export class FileService {
           !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) &&
           file.name !== 'package-lock.json'
         ) {
-          tree.push(`${indent}${prefix}${file.name}`);
+          fileItems.push({
+            path: path.join(dir, file.name),
+            name: file.name,
+            isDirectory: false,
+            isLast,
+            indent,
+          });
         }
       }
     }
 
-    await traverse(directoryPath);
+    await collectItems(directoryPath);
+
+    // Process items in chunks
+    if (options) {
+      await this.queueService.processChunked(
+        fileItems,
+        async (item) => {
+          const prefix = item.isLast ? '└── ' : '├── ';
+          tree.push(`${item.indent}${prefix}${item.name}`);
+          return true;
+        },
+        options,
+      );
+    } else {
+      // Fallback to synchronous processing if no options provided
+      fileItems.forEach((item) => {
+        const prefix = item.isLast ? '└── ' : '├── ';
+        tree.push(`${item.indent}${prefix}${item.name}`);
+      });
+    }
+
     return tree.join('\n');
   }
 
@@ -58,10 +111,13 @@ export class FileService {
     rootPath: string,
     directoryPath: string,
     includeDotFolders: boolean,
+    options?: ProcessingOptions,
   ): Promise<string> {
+    const fileItems: { path: string; relativePath: string }[] = [];
     let combinedContent = '';
 
-    async function traverse(dir: string): Promise<void> {
+    // First pass: collect all file paths
+    async function collectFiles(dir: string): Promise<void> {
       const files = await fsP.readdir(dir, { withFileTypes: true });
 
       for (const file of files) {
@@ -73,21 +129,52 @@ export class FileService {
             (!file.name.startsWith('.') &&
               !['node_modules', 'dist'].includes(file.name)))
         ) {
-          await traverse(fullPath);
+          await collectFiles(fullPath);
         } else if (
           file.isFile() &&
           !file.name.match(/\.(jpg|jpeg|png|gif|bmp|tiff|svg|lock|key)$/) &&
           file.name !== 'package-lock.json'
         ) {
-          const relativePath = path.relative(rootPath, fullPath);
-          const content = await fsP.readFile(fullPath, 'utf-8');
-          const fileExtension = path.extname(fullPath).substring(1);
-          combinedContent += `\n\n# ./${relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
+          fileItems.push({
+            path: fullPath,
+            relativePath: path.relative(rootPath, fullPath),
+          });
         }
       }
     }
 
-    await traverse(directoryPath);
+    await collectFiles(directoryPath);
+
+    // Process files in chunks
+    if (options) {
+      const results = await this.queueService.processChunked(
+        fileItems,
+        async (item) => {
+          try {
+            const content = await fsP.readFile(item.path, 'utf-8');
+            const fileExtension = path.extname(item.path).substring(1);
+            return `\n\n# ./${item.relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
+          } catch (error) {
+            logger.error(`Error reading file ${item.path}:`, { error });
+            return '';
+          }
+        },
+        options,
+      );
+      combinedContent = results.join('');
+    } else {
+      // Fallback to synchronous processing
+      for (const item of fileItems) {
+        try {
+          const content = await fsP.readFile(item.path, 'utf-8');
+          const fileExtension = path.extname(item.path).substring(1);
+          combinedContent += `\n\n# ./${item.relativePath}\n\n\`\`\`${fileExtension}\n${content}\n\`\`\`\n`;
+        } catch (error) {
+          logger.error(`Error reading file ${item.path}:`, { error });
+        }
+      }
+    }
+
     return combinedContent;
   }
 
@@ -95,22 +182,36 @@ export class FileService {
     let fileCount = 0;
     const MAX_FILES = 1000;
 
-    function countFiles(dir: string) {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const filePath = path.join(dir, file);
-        if (fs.statSync(filePath).isDirectory()) {
-          countFiles(filePath);
-        } else {
-          fileCount++;
-          if (fileCount > MAX_FILES) {
-            return;
+    function countFiles(dir: string): void {
+      try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          try {
+            const filePath = path.join(dir, file);
+            if (fs.statSync(filePath).isDirectory()) {
+              countFiles(filePath);
+            } else {
+              fileCount++;
+              if (fileCount > MAX_FILES) {
+                return;
+              }
+            }
+          } catch (error) {
+            // Skip files that can't be accessed
+            continue;
           }
         }
+      } catch (error) {
+        // Skip directories that can't be accessed
+        return;
       }
     }
 
-    countFiles(dirPath);
-    return fileCount > MAX_FILES;
+    try {
+      countFiles(dirPath);
+      return fileCount > MAX_FILES;
+    } catch (error) {
+      return false;
+    }
   }
 }

@@ -1,18 +1,17 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2020",
-    "outDir": "out",
     "lib": [
       "ES2020",
       "DOM"
     ],
     "sourceMap": true,
-    "rootDir": "src",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "jsx": "react",
     "types": [
       "node",
       "jest",
@@ -21,14 +20,11 @@
     "moduleResolution": "node"
   },
   "include": [
-    "src/**/*"
+    "./**/*",
+    "../backend/**/*"
   ],
   "exclude": [
     "node_modules",
-    ".vscode-test",
-    "out",
-    "dist",
-    "src/test",
-    "/rules"
+    ".vscode-test"
   ]
 }

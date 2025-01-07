@@ -1,0 +1,33 @@
+.error-boundary {
+  padding: 2rem;
+  margin: 1rem;
+  border: 1px solid var(--vscode-errorForeground);
+  border-radius: 4px;
+  background-color: var(--vscode-errorBackground);
+  color: var(--vscode-errorForeground);
+}
+
+.error-boundary h2 {
+  margin-top: 0;
+  color: var(--vscode-errorForeground);
+}
+
+.error-details {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: var(--vscode-editor-background);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.error-actions vscode-button {
+  margin: 0;
+} 

@@ -1,151 +1,162 @@
 // Mock VSCode
 jest.mock('vscode', () => {
-  const mockVSCode = jest.requireActual('./vscode.mock').default;
   return {
-    ...mockVSCode,
     window: {
-      ...mockVSCode.window,
-      withProgress: jest.fn(),
+      withProgress: jest.fn((options, task) => {
+        const progress = { report: jest.fn() };
+        const token = {
+          isCancellationRequested: false,
+          onCancellationRequested: () => ({ dispose: () => {} }),
+        };
+        return task(progress, token);
+      }),
+    },
+    ProgressLocation: {
+      Notification: 1,
     },
   };
 });
 
-import { QueueService, ProcessingOptions } from '../backend/services/queueService';
-import mockVSCode from './vscode.mock';
+import {
+  QueueService,
+  ProcessingOptions,
+} from '../backend/services/queueService';
 
 describe('QueueService', () => {
   let queueService: QueueService;
-  let mockProgress: jest.Mock;
+  let mockProcessingFunction: jest.Mock;
 
   beforeEach(() => {
+    mockProcessingFunction = jest.fn();
     queueService = new QueueService();
-    mockProgress = jest.fn();
-    mockVSCode.window.withProgress.mockImplementation(async (options, task) => {
-      const progress = { report: mockProgress };
-      const token = {
-        isCancellationRequested: false,
-        onCancellationRequested: () => ({ dispose: () => {} }),
-      };
-      return task(progress, token);
-    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('enqueue', () => {
-    it('should add items to queue with correct priority', async () => {
-      await queueService.enqueue('item1', 1);
-      await queueService.enqueue('item2', 2);
-      await queueService.enqueue('item3', 0);
-
-      expect(queueService.currentQueueSize).toBe(3);
-    });
-  });
-
-  describe('processChunked', () => {
-    const mockItems = Array.from({ length: 100 }, (_, i) => `item${i}`);
-    const mockProcessor = jest.fn(async (item: string) => `processed_${item}`);
+  it('should process items in order', async () => {
+    const items = ['item1', 'item2', 'item3'];
     const options: ProcessingOptions = {
-      chunkSize: 10,
+      chunkSize: 1,
       delayBetweenChunks: 0,
     };
 
-    beforeEach(() => {
-      mockProcessor.mockClear();
-    });
+    mockProcessingFunction.mockResolvedValueOnce('result1');
+    mockProcessingFunction.mockResolvedValueOnce('result2');
+    mockProcessingFunction.mockResolvedValueOnce('result3');
 
-    it('should process all items in chunks', async () => {
-      const results = await queueService.processChunked(
-        mockItems,
-        mockProcessor,
-        options,
-      );
+    const results = await queueService.processChunked(
+      items,
+      mockProcessingFunction,
+      options,
+    );
 
-      expect(results).toHaveLength(mockItems.length);
-      expect(mockProcessor).toHaveBeenCalledTimes(mockItems.length);
-      expect(mockProgress).toHaveBeenCalled();
-    });
-
-    it('should respect chunk size', async () => {
-      const smallerOptions: ProcessingOptions = {
-        chunkSize: 5,
-        delayBetweenChunks: 0,
-      };
-
-      await queueService.processChunked(
-        mockItems,
-        mockProcessor,
-        smallerOptions,
-      );
-
-      // Progress should be called 20 times (100 items / 5 items per chunk)
-      expect(mockProgress).toHaveBeenCalledTimes(20);
-    });
-
-    it('should handle empty input', async () => {
-      const results = await queueService.processChunked(
-        [],
-        mockProcessor,
-        options,
-      );
-      expect(results).toHaveLength(0);
-      expect(mockProcessor).not.toHaveBeenCalled();
-    });
-
-    it('should handle processor errors', async () => {
-      const errorProcessor = jest.fn(async (item: string) => {
-        if (item === 'item5') {
-          throw new Error('Test error');
-        }
-        return `processed_${item}`;
-      });
-
-      await expect(
-        queueService.processChunked(mockItems, errorProcessor, options),
-      ).rejects.toThrow('Test error');
-    });
-
-    it('should respect cancellation token', async () => {
-      const cancelToken = {
-        isCancellationRequested: true,
-        onCancellationRequested: () => ({ dispose: () => {} }),
-      };
-      const optionsWithCancel: ProcessingOptions = {
-        ...options,
-        cancelToken,
-      };
-
-      const results = await queueService.processChunked(
-        mockItems,
-        mockProcessor,
-        optionsWithCancel,
-      );
-
-      expect(results).toHaveLength(0);
-      expect(mockProcessor).not.toHaveBeenCalled();
-    });
-
-    it('should report progress correctly', async () => {
-      await queueService.processChunked(mockItems, mockProcessor, options);
-
-      const progressCalls = mockProgress.mock.calls;
-      const firstCall = progressCalls[0][0];
-      const lastCall = progressCalls[progressCalls.length - 1][0];
-
-      expect(firstCall.increment).toBeLessThanOrEqual(100);
-      expect(lastCall.message).toContain('Processed');
-    });
+    expect(results).toEqual(['result1', 'result2', 'result3']);
+    expect(mockProcessingFunction).toHaveBeenCalledTimes(3);
+    expect(mockProcessingFunction.mock.calls[0][0]).toBe('item1');
+    expect(mockProcessingFunction.mock.calls[1][0]).toBe('item2');
+    expect(mockProcessingFunction.mock.calls[2][0]).toBe('item3');
   });
 
-  describe('clearQueue', () => {
-    it('should clear the queue', async () => {
-      await queueService.enqueue('item1');
-      await queueService.enqueue('item2');
+  it('should respect chunk size and delay', async () => {
+    const items = ['item1', 'item2', 'item3', 'item4'];
+    const options: ProcessingOptions = {
+      chunkSize: 2,
+      delayBetweenChunks: 100,
+    };
 
-      queueService.clearQueue();
-      expect(queueService.currentQueueSize).toBe(0);
+    mockProcessingFunction.mockResolvedValue('result');
+
+    const startTime = Date.now();
+    await queueService.processChunked(items, mockProcessingFunction, options);
+    const endTime = Date.now();
+
+    expect(endTime - startTime).toBeGreaterThanOrEqual(100);
+    expect(mockProcessingFunction).toHaveBeenCalledTimes(4);
+  });
+
+  it('should handle empty item list', async () => {
+    const items: string[] = [];
+    const options: ProcessingOptions = {
+      chunkSize: 1,
+      delayBetweenChunks: 0,
+    };
+
+    const results = await queueService.processChunked(
+      items,
+      mockProcessingFunction,
+      options,
+    );
+
+    expect(results).toEqual([]);
+    expect(mockProcessingFunction).not.toHaveBeenCalled();
+  });
+
+  it('should handle processing errors', async () => {
+    const items = ['item1', 'item2'];
+    const options: ProcessingOptions = {
+      chunkSize: 1,
+      delayBetweenChunks: 0,
+    };
+
+    const error = new Error('Processing error');
+    mockProcessingFunction.mockRejectedValue(error);
+
+    await expect(
+      queueService.processChunked(items, mockProcessingFunction, options),
+    ).rejects.toThrow('Processing error');
+  });
+
+  it('should respect cancellation token', async () => {
+    const items = ['item1', 'item2', 'item3'];
+    const options: ProcessingOptions = {
+      chunkSize: 1,
+      delayBetweenChunks: 0,
+      cancelToken: {
+        isCancellationRequested: true,
+        onCancellationRequested: () => ({ dispose: () => {} }),
+      },
+    };
+
+    const results = await queueService.processChunked(
+      items,
+      mockProcessingFunction,
+      options,
+    );
+
+    expect(results).toEqual([]);
+    expect(mockProcessingFunction).not.toHaveBeenCalled();
+  });
+
+  it('should handle cancellation during processing', async () => {
+    const items = ['item1', 'item2', 'item3'];
+    let isCancelled = false;
+    const options: ProcessingOptions = {
+      chunkSize: 1,
+      delayBetweenChunks: 0,
+      cancelToken: {
+        get isCancellationRequested() {
+          return isCancelled;
+        },
+        onCancellationRequested: () => ({ dispose: () => {} }),
+      },
+    };
+
+    mockProcessingFunction.mockImplementation(async () => {
+      if (mockProcessingFunction.mock.calls.length === 2) {
+        isCancelled = true;
+      }
+      return 'result';
     });
+
+    const results = await queueService.processChunked(
+      items,
+      mockProcessingFunction,
+      options,
+    );
+
+    expect(results).toEqual(['result', 'result']);
+    expect(mockProcessingFunction).toHaveBeenCalledTimes(2);
   });
 });

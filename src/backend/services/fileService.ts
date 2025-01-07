@@ -5,7 +5,7 @@ import { logger } from '../../shared/logger';
 import { ProcessingOptions } from './queueService';
 
 export class FileService {
-  private readonly excludedFolders = new Set([
+  protected readonly excludedFolders = new Set([
     'node_modules',
     '.git',
     'dist',
@@ -13,7 +13,7 @@ export class FileService {
     'coverage',
   ]);
 
-  private readonly excludedFiles = new Set([
+  protected readonly excludedFiles = new Set([
     '.DS_Store',
     'Thumbs.db',
     '.env',

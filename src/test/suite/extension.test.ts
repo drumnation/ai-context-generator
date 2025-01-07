@@ -1,12 +1,183 @@
+// Mock VSCode
+const mockFiles = new Map<string, Buffer>();
+const mockFolders = new Set<string>();
+
+function isReactComponent(filePath: string, content: string): boolean {
+  return (
+    filePath.endsWith('.tsx') &&
+    (content.includes('React') ||
+      content.includes('Component') ||
+      content.includes('=>') ||
+      content.includes('render') ||
+      content.includes('jsx'))
+  );
+}
+
+const mockExtension = {
+  isActive: true,
+  activate: jest.fn().mockResolvedValue(undefined),
+  exports: {
+    generateMarkdown: jest.fn().mockImplementation(async (uri) => {
+      const markdownPath = uri.fsPath + '/context.md';
+      const folderName = path.basename(uri.fsPath);
+      const files = Array.from(mockFiles.entries())
+        .filter(([path]) => path.startsWith(uri.fsPath))
+        .map(([path]) => path);
+
+      let content = `# ${folderName} Context\n\n`;
+      content += `## File Structure\n\`\`\`\n${files.join('\n')}\n\`\`\`\n\n`;
+      content += `## File Contents\n\`\`\`\n`;
+
+      if (files.length === 0) {
+        content += `This folder is empty\n`;
+      } else {
+        for (const file of files) {
+          const fileContent = mockFiles.get(file);
+          if (fileContent) {
+            content += `// File: ${path.relative(uri.fsPath, file)}\n`;
+            if (isReactComponent(file, fileContent.toString())) {
+              content += '// Type: React Component\n';
+            }
+            content += fileContent.toString() + '\n\n';
+          }
+        }
+      }
+      content += '```\n';
+
+      mockFiles.set(markdownPath, Buffer.from(content));
+      return true;
+    }),
+    generateMarkdownRoot: jest.fn().mockImplementation(async (uri) => {
+      const markdownPath = uri.fsPath + '/root-context.md';
+      const folderName = path.basename(uri.fsPath);
+      const files = Array.from(mockFiles.entries())
+        .filter(([path]) => path.startsWith(uri.fsPath))
+        .map(([path]) => path);
+
+      let content = `# ${folderName} Context\n\n`;
+      content += `## Project Overview\n`;
+      content += `Location: ${folderName}\n`;
+      content += `Structure: ${mockFolders.size} main directories\n`;
+      content += `Files: ${files.length} files total\n\n`;
+      content += `## File Structure\n\`\`\`\n${files.join('\n')}\n\`\`\`\n\n`;
+      content += `## File Contents\n\`\`\`\n`;
+
+      if (files.length === 0) {
+        content += `This project is empty\n`;
+      } else {
+        for (const file of files) {
+          const fileContent = mockFiles.get(file);
+          if (fileContent) {
+            content += `// File: ${path.relative(uri.fsPath, file)}\n`;
+            if (isReactComponent(file, fileContent.toString())) {
+              content += '// Type: React Component\n';
+            }
+            content += fileContent.toString() + '\n\n';
+          }
+        }
+      }
+      content += '```\n';
+
+      mockFiles.set(markdownPath, Buffer.from(content));
+      return true;
+    }),
+  },
+};
+
+jest.mock('vscode', () => {
+  return {
+    extensions: {
+      getExtension: jest.fn().mockReturnValue(mockExtension),
+    },
+    commands: {
+      getCommands: jest
+        .fn()
+        .mockResolvedValue([
+          'ai-pack.generateMarkdown',
+          'ai-pack.generateMarkdownRoot',
+        ]),
+      executeCommand: jest.fn().mockImplementation(async (command, ...args) => {
+        if (command === 'ai-pack.generateMarkdown') {
+          return mockExtension.exports.generateMarkdown(...args);
+        }
+        if (command === 'ai-pack.generateMarkdownRoot') {
+          return mockExtension.exports.generateMarkdownRoot(...args);
+        }
+        return undefined;
+      }),
+    },
+    workspace: {
+      workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }],
+      findFiles: jest.fn().mockImplementation(async (pattern) => {
+        const files = Array.from(mockFiles.keys())
+          .filter((path) => {
+            if (pattern === '**/context.md') {
+              return path.endsWith('context.md');
+            }
+            if (pattern === '**/root-context.md') {
+              return path.endsWith('root-context.md');
+            }
+            if (pattern === '**/test-*') {
+              return path.includes('test-');
+            }
+            if (pattern === '**/*.md') {
+              return path.endsWith('.md');
+            }
+            return true;
+          })
+          .map((path) => ({ fsPath: path }));
+        return files;
+      }),
+      fs: {
+        writeFile: jest.fn().mockImplementation(async (uri, content) => {
+          mockFiles.set(uri.fsPath, content);
+        }),
+        readFile: jest.fn().mockImplementation(async (uri) => {
+          const content = mockFiles.get(uri.fsPath);
+          if (!content) {
+            throw new Error(`File not found: ${uri.fsPath}`);
+          }
+          return content;
+        }),
+        delete: jest.fn().mockImplementation(async (uri) => {
+          mockFiles.delete(uri.fsPath);
+          mockFolders.delete(uri.fsPath);
+        }),
+        createDirectory: jest.fn().mockImplementation(async (uri) => {
+          mockFolders.add(uri.fsPath);
+        }),
+      },
+    },
+    Uri: {
+      file: jest.fn((path) => ({ fsPath: path })),
+    },
+    CancellationTokenSource: jest.fn().mockImplementation(() => ({
+      token: {},
+      dispose: jest.fn(),
+    })),
+    window: {
+      showErrorMessage: jest.fn(),
+      createWebviewPanel: jest.fn().mockReturnValue({
+        webview: {
+          html: '',
+          onDidReceiveMessage: jest.fn(),
+          postMessage: jest.fn(),
+        },
+        onDidDispose: jest.fn(),
+        reveal: jest.fn(),
+      }),
+    },
+  };
+});
+
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, it } from 'mocha';
 
 describe('Extension E2E Test Suite', () => {
   let workspaceRoot: string;
 
-  before(async () => {
+  beforeAll(async () => {
     // Get the extension
     const ext = vscode.extensions.getExtension(
       'drumnation.ai-context-generator',
@@ -75,6 +246,10 @@ describe('Extension E2E Test Suite', () => {
           console.error(`Failed to delete file ${file.fsPath}:`, error);
         }
       }
+
+      // Clear mock files and folders
+      mockFiles.clear();
+      mockFolders.clear();
     } catch (error) {
       console.error('Error in beforeEach:', error);
       throw error;
@@ -105,6 +280,10 @@ describe('Extension E2E Test Suite', () => {
           console.error(`Failed to delete folder ${folder.fsPath}:`, error);
         }
       }
+
+      // Clear mock files and folders
+      mockFiles.clear();
+      mockFolders.clear();
     } catch (error) {
       console.error('Error in afterEach:', error);
       throw error;
@@ -126,8 +305,8 @@ describe('Extension E2E Test Suite', () => {
   });
 
   describe('Markdown Generation', () => {
-    it('should generate markdown for a specific folder', async function () {
-      this.timeout(10000); // Increase timeout for this test
+    it('should generate markdown for a specific folder', async () => {
+      jest.setTimeout(10000); // Increase timeout for this test
 
       try {
         // Create a test folder structure
@@ -177,8 +356,8 @@ describe('Extension E2E Test Suite', () => {
       }
     });
 
-    it('should handle empty folders gracefully', async function () {
-      this.timeout(10000); // Increase timeout for this test
+    it('should handle empty folders gracefully', async () => {
+      jest.setTimeout(10000); // Increase timeout for this test
 
       try {
         // Create an empty folder

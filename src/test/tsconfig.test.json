@@ -13,7 +13,8 @@
     "**/*.ts",
     "**/*.test.ts",
     "../backend/**/*",
-    "../shared/**/*"
+    "../shared/**/*",
+    "../di/**/*"
   ],
   "exclude": [
     "node_modules",

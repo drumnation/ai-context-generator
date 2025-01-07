@@ -10,6 +10,14 @@ jest.mock('vscode', () => ({
   window: {
     showErrorMessage: jest.fn(),
   },
+  workspace: {
+    fs: {
+      writeFile: jest.fn().mockResolvedValue(undefined),
+    },
+  },
+  Uri: {
+    file: jest.fn((path) => ({ fsPath: path })),
+  },
   CancellationTokenSource: jest.fn().mockImplementation(() => ({
     token: {},
     dispose: jest.fn(),
@@ -24,6 +32,7 @@ describe('MarkdownGenerator', () => {
   let mockContainer: jest.Mocked<ContainerBase>;
   let mockWebviewPanel: vscode.WebviewPanel;
   let mockWebviewPanelProvider: jest.Mocked<WebviewPanelProvider>;
+  let mockPostMessage: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -33,10 +42,13 @@ describe('MarkdownGenerator', () => {
       extensionPath: '/test/path',
     } as unknown as vscode.ExtensionContext;
 
+    // Setup mock post message
+    mockPostMessage = jest.fn();
+
     // Setup mock webview panel
     mockWebviewPanel = {
       webview: {
-        postMessage: jest.fn(),
+        postMessage: mockPostMessage,
       },
     } as unknown as vscode.WebviewPanel;
 
@@ -56,6 +68,9 @@ describe('MarkdownGenerator', () => {
         .fn()
         .mockResolvedValue({ files: [], directories: [] }),
       combineFiles: jest.fn().mockResolvedValue('Combined content'),
+      readFile: jest.fn().mockResolvedValue('{}'),
+      countFiles: jest.fn().mockResolvedValue(10),
+      listDirectories: jest.fn().mockResolvedValue(['dir1', 'dir2']),
     } as unknown as jest.Mocked<FileService>;
   });
 
@@ -103,15 +118,21 @@ describe('MarkdownGenerator', () => {
         }),
       );
 
+      // Verify markdown file was written
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Buffer),
+      );
+
       // Verify webview updates
-      expect(mockWebviewPanel.webview.postMessage).toHaveBeenCalledTimes(2);
-      expect(mockWebviewPanel.webview.postMessage).toHaveBeenNthCalledWith(1, {
+      expect(mockPostMessage).toHaveBeenCalledTimes(2);
+      expect(mockPostMessage).toHaveBeenNthCalledWith(1, {
         command: 'updateFileTree',
         fileTree: { files: [], directories: [] },
         isRoot: true,
         mode: 'root',
       });
-      expect(mockWebviewPanel.webview.postMessage).toHaveBeenNthCalledWith(2, {
+      expect(mockPostMessage).toHaveBeenNthCalledWith(2, {
         command: 'updateContent',
         fileTree: { files: [], directories: [] },
         combinedContent: 'Combined content',
@@ -175,7 +196,7 @@ describe('MarkdownGenerator', () => {
         mockContainer,
       );
 
-      expect(mockWebviewPanel.webview.postMessage).toHaveBeenCalledWith(
+      expect(mockPostMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           mode: 'directory',
         }),

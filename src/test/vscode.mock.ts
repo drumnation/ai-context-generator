@@ -57,73 +57,13 @@ export interface EnvironmentVariableCollection {
 }
 
 export interface EnvironmentVariableScope {
-  workspaceFolder?: { uri: Uri };
-}
-
-export interface Uri {
-  scheme: string;
-  authority: string;
-  path: string;
-  query: string;
-  fragment: string;
-  fsPath: string;
-  with(change: {
-    scheme?: string;
-    authority?: string;
-    path?: string;
-    query?: string;
-    fragment?: string;
-  }): Uri;
-  toString(): string;
-  toJSON(): object;
+  workspaceFolder?: { uri: { scheme: string; path: string } };
 }
 
 export interface WebviewPanel {
   webview: unknown;
   onDidDispose: Event<void>;
   reveal(): void;
-}
-
-export interface Extension<T> {
-  id: string;
-  extensionUri: Uri;
-  extensionPath: string;
-  isActive: boolean;
-  packageJSON: unknown;
-  exports: T | undefined;
-  activate(): Thenable<T>;
-  extensionKind: ExtensionKind;
-}
-
-export interface LanguageModelChat {
-  messages?: unknown[];
-}
-
-export interface LanguageModelAccessInformation {
-  keyExpiresAt?: number;
-  keyId?: string;
-  onDidChange: Event<void>;
-  canSendRequest(chat: LanguageModelChat): boolean | undefined;
-}
-
-export interface ExtensionContext {
-  subscriptions: { dispose(): void }[];
-  extensionPath: string;
-  extensionUri: Uri;
-  globalState: Memento;
-  workspaceState: Memento;
-  secrets: SecretStorage;
-  storageUri: Uri | undefined;
-  globalStorageUri: Uri;
-  logUri: Uri;
-  extensionMode: ExtensionMode;
-  environmentVariableCollection: EnvironmentVariableCollection;
-  asAbsolutePath(relativePath: string): string;
-  storagePath: string;
-  globalStoragePath: string;
-  logPath: string;
-  extension: Extension<unknown>;
-  languageModelAccessInformation: LanguageModelAccessInformation;
 }
 
 export enum ExtensionMode {
@@ -143,23 +83,29 @@ export enum EnvironmentVariableMutatorType {
   Prepend = 3,
 }
 
-const mockVSCode = {
+export enum ProgressLocation {
+  Notification = 1,
+  SourceControl = 2,
+  Window = 3,
+}
+
+export const createMockVSCode = () => ({
   window: {
-    withProgress: jest.fn().mockImplementation(async (options, task) => {
-      const progress = { report: jest.fn() };
-      const token = { isCancellationRequested: false };
-      return task(progress, token);
-    }),
+    withProgress: jest.fn(),
+    createOutputChannel: jest.fn(),
     showInformationMessage: jest.fn(),
     showErrorMessage: jest.fn(),
-    showWarningMessage: jest.fn(),
   },
-  ProgressLocation: {
-    Notification: 1,
+  ProgressLocation,
+  ExtensionMode,
+  ExtensionKind,
+  EnvironmentVariableMutatorType,
+  workspace: {
+    workspaceFolders: [],
+    getConfiguration: jest.fn(),
   },
-  CancellationToken: jest.fn(),
   Uri: {
-    file: (path: string): Uri => ({
+    file: jest.fn((path: string) => ({
       scheme: 'file',
       authority: '',
       path,
@@ -169,11 +115,42 @@ const mockVSCode = {
       with: jest.fn(),
       toString: () => `file://${path}`,
       toJSON: () => ({ scheme: 'file', path }),
-    }),
+    })),
+    parse: jest.fn(),
   },
-  ExtensionMode,
-  ExtensionKind,
-  EnvironmentVariableMutatorType,
-} as const;
+  Disposable: jest.fn().mockImplementation(() => ({
+    dispose: jest.fn(),
+  })),
+  Memento: jest.fn().mockImplementation(() => ({
+    get: jest.fn(),
+    update: jest.fn(),
+    setKeysForSync: jest.fn(),
+    keys: jest.fn(),
+  })),
+  SecretStorage: jest.fn().mockImplementation(() => ({
+    get: jest.fn(),
+    store: jest.fn(),
+    delete: jest.fn(),
+    onDidChange: jest.fn(),
+  })),
+  WebviewPanel: jest.fn().mockImplementation(() => ({
+    webview: {},
+    onDidDispose: jest.fn(),
+    reveal: jest.fn(),
+  })),
+  EnvironmentVariableCollection: jest.fn().mockImplementation(() => ({
+    persistent: false,
+    description: '',
+    replace: jest.fn(),
+    append: jest.fn(),
+    prepend: jest.fn(),
+    get: jest.fn(),
+    forEach: jest.fn(),
+    delete: jest.fn(),
+    clear: jest.fn(),
+    [Symbol.iterator]: jest.fn(),
+    getScoped: jest.fn(),
+  })),
+});
 
-export default mockVSCode;
+export default createMockVSCode();

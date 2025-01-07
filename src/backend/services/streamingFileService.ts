@@ -6,7 +6,9 @@ import { FileService } from './fileService';
 import { logger } from '../../shared/logger';
 import { ProcessingOptions } from './queueService';
 import { CacheService } from './cacheService';
+import { ProgressService } from './progressService';
 import * as fs from 'fs';
+import * as vscode from 'vscode';
 
 interface FileStream {
   stream: Readable;
@@ -19,11 +21,6 @@ interface MemoryStats {
   heapUsed: number;
   heapTotal: number;
   rss: number;
-}
-
-interface ProcessingResult {
-  content: string;
-  path: string;
 }
 
 interface DirectoryEntry {
@@ -54,14 +51,17 @@ export class StreamingFileService extends FileService {
   private readonly TREE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private fileCache: CacheService<string>;
   private directoryCache: Map<string, DirectoryCache> = new Map();
+  private progressService: ProgressService;
 
   constructor(
     maxCacheSize: number = 50 * 1024 * 1024,
     maxParallelOps: number = 4,
+    progressService?: ProgressService,
   ) {
     super();
     this.fileCache = new CacheService<string>(maxCacheSize);
     this.maxParallelOperations = maxParallelOps;
+    this.progressService = progressService || new ProgressService();
   }
 
   private getMemoryStats(): MemoryStats {
@@ -158,22 +158,50 @@ export class StreamingFileService extends FileService {
   }
 
   private async readFileWithStream(filePath: string): Promise<string> {
-    try {
-      const stream = fs.createReadStream(filePath, {
-        encoding: 'utf8',
-        highWaterMark: 64 * 1024, // 64KB chunks
-      });
+    const taskId = `read_${filePath}`;
+    return this.progressService.withProgress(
+      taskId,
+      {
+        title: `Reading ${path.basename(filePath)}`,
+        cancellable: true,
+      },
+      async (
+        progress: vscode.Progress<{ message?: string; increment?: number }>,
+        token: vscode.CancellationToken,
+      ) => {
+        try {
+          const stream = fs.createReadStream(filePath, {
+            encoding: 'utf8',
+            highWaterMark: 64 * 1024, // 64KB chunks
+          });
 
-      let content = '';
-      for await (const chunk of stream) {
-        content += chunk;
-      }
+          const stats = await fsPromises.stat(filePath);
+          let bytesRead = 0;
+          let content = '';
 
-      return content;
-    } catch (error) {
-      logger.error('Error reading file:', { error, filePath });
-      throw error;
-    }
+          for await (const chunk of stream) {
+            if (token.isCancellationRequested) {
+              stream.destroy();
+              throw new Error('Operation cancelled');
+            }
+
+            content += chunk;
+            bytesRead += Buffer.byteLength(chunk);
+
+            this.progressService.updateProgress(taskId, {
+              current: bytesRead,
+              total: stats.size,
+              message: `Read ${this.formatBytes(bytesRead)} of ${this.formatBytes(stats.size)}`,
+            });
+          }
+
+          return content;
+        } catch (error) {
+          logger.error('Error reading file:', { error, filePath });
+          throw error;
+        }
+      },
+    );
   }
 
   // Override readFile to use streaming
@@ -194,117 +222,127 @@ export class StreamingFileService extends FileService {
     options: ProcessingOptions,
     level = 0,
   ): Promise<string> {
-    try {
-      // Check cache first
-      const cachedTree = this.directoryCache.get(directoryPath);
-      if (
-        cachedTree &&
-        Date.now() - cachedTree.timestamp < this.TREE_CACHE_TTL &&
-        cachedTree.includeDotFolders === includeDotFolders &&
-        !(await this.shouldInvalidateCache(directoryPath, cachedTree))
-      ) {
-        logger.info('File tree cache hit', { directoryPath });
-        // Return cached result immediately without any processing
-        return this.formatDirectoryEntries(cachedTree.entries, level);
-      }
-
-      // Get directory entries
-      const entries = await fsPromises.readdir(directoryPath, {
-        withFileTypes: true,
-      });
-
-      // Process entries in parallel chunks for better performance
-      const chunkSize = Math.ceil(entries.length / this.maxParallelOperations);
-      const chunks = Array.from(
-        { length: Math.ceil(entries.length / chunkSize) },
-        (_, i) => entries.slice(i * chunkSize, (i + 1) * chunkSize),
-      );
-
-      const processedChunks = await Promise.all(
-        chunks.map(async (chunk) => {
-          const results: DirectoryEntry[] = [];
-          for (const entry of chunk) {
-            if (options.cancelToken?.isCancellationRequested) {
-              break;
-            }
-
-            if (this.shouldSkip(entry.name, includeDotFolders)) {
-              continue;
-            }
-
-            const fullPath = path.join(directoryPath, entry.name);
-            let stats: Stats | null = null;
-            try {
-              stats = await fsPromises.stat(fullPath);
-            } catch (error) {
-              continue; // Skip entries we can't stat
-            }
-
-            const dirEntry: DirectoryEntry = {
-              name: entry.name,
-              path: fullPath,
-              isDirectory: entry.isDirectory(),
-              size: stats.size,
-              lastModified: stats.mtimeMs,
-              children: entry.isDirectory() ? [] : undefined,
-            };
-
-            if (dirEntry.isDirectory) {
-              // Check cache for subdirectory
-              const subCachedTree = this.directoryCache.get(fullPath);
-              if (
-                subCachedTree &&
-                Date.now() - subCachedTree.timestamp < this.TREE_CACHE_TTL &&
-                !(await this.shouldInvalidateCache(fullPath, subCachedTree))
-              ) {
-                logger.info('Subdirectory cache hit', { path: fullPath });
-                dirEntry.children = subCachedTree.entries;
-              } else {
-                // Recursively process subdirectories
-                const subTree = await this.generateFileTree(
-                  fullPath,
-                  rootPath,
-                  includeDotFolders,
-                  options,
-                  level + 1,
-                );
-                if (subTree && dirEntry.children) {
-                  const subEntries = this.parseTreeToEntries(
-                    subTree,
-                    level + 1,
-                    fullPath,
-                  );
-                  dirEntry.children = subEntries;
-                }
-              }
-            }
-
-            results.push(dirEntry);
+    const taskId = `tree_${directoryPath}`;
+    return this.progressService.withProgress(
+      taskId,
+      {
+        title: `Generating file tree for ${path.basename(directoryPath)}`,
+        cancellable: true,
+      },
+      async (
+        progress: vscode.Progress<{ message?: string; increment?: number }>,
+        token: vscode.CancellationToken,
+      ) => {
+        try {
+          // Check cache first
+          const cachedTree = this.directoryCache.get(directoryPath);
+          if (
+            cachedTree &&
+            Date.now() - cachedTree.timestamp < this.TREE_CACHE_TTL &&
+            cachedTree.includeDotFolders === includeDotFolders
+          ) {
+            this.progressService.updateProgress(taskId, {
+              message: 'Using cached file tree',
+              current: 100,
+              total: 100,
+            });
+            return this.formatDirectoryEntries(cachedTree.entries, level);
           }
-          return results;
-        }),
-      );
 
-      const allEntries = processedChunks
-        .flat()
-        .sort((a, b) => a.name.localeCompare(b.name));
+          const entries = await fsPromises.readdir(directoryPath, {
+            withFileTypes: true,
+          });
 
-      // Cache the results with a timestamp
-      this.directoryCache.set(directoryPath, {
-        entries: allEntries,
-        timestamp: Date.now(),
-        size: allEntries.reduce((sum, entry) => sum + (entry.size || 0), 0),
-        includeDotFolders,
-      });
+          const validEntries = entries.filter(
+            (entry) => !this.shouldSkip(entry.name, includeDotFolders),
+          );
 
-      return this.formatDirectoryEntries(allEntries, level);
-    } catch (error) {
-      logger.error('Error generating file tree:', {
-        error,
-        directoryPath,
-      });
-      throw error;
-    }
+          const chunkSize = Math.ceil(
+            validEntries.length / this.maxParallelOperations,
+          );
+          const chunks = Array.from(
+            { length: Math.ceil(validEntries.length / chunkSize) },
+            (_, i) => validEntries.slice(i * chunkSize, (i + 1) * chunkSize),
+          );
+
+          let processedCount = 0;
+          const processedChunks = await Promise.all(
+            chunks.map(async (chunk) => {
+              const results: DirectoryEntry[] = [];
+              for (const entry of chunk) {
+                if (token.isCancellationRequested) {
+                  break;
+                }
+
+                const fullPath = path.join(directoryPath, entry.name);
+                let stats: Stats | null = null;
+                try {
+                  stats = await fsPromises.stat(fullPath);
+                } catch (error) {
+                  continue;
+                }
+
+                const dirEntry: DirectoryEntry = {
+                  name: entry.name,
+                  path: fullPath,
+                  isDirectory: entry.isDirectory(),
+                  size: stats.size,
+                  lastModified: stats.mtimeMs,
+                  children: entry.isDirectory() ? [] : undefined,
+                };
+
+                if (dirEntry.isDirectory) {
+                  const subTree = await this.generateFileTree(
+                    fullPath,
+                    rootPath,
+                    includeDotFolders,
+                    options,
+                    level + 1,
+                  );
+                  if (subTree && dirEntry.children) {
+                    const subEntries = this.parseTreeToEntries(
+                      subTree,
+                      level + 1,
+                      fullPath,
+                    );
+                    dirEntry.children = subEntries;
+                  }
+                }
+
+                results.push(dirEntry);
+                processedCount++;
+
+                this.progressService.updateProgress(taskId, {
+                  current: processedCount,
+                  total: validEntries.length,
+                  message: `Processed ${processedCount} of ${validEntries.length} entries`,
+                });
+              }
+              return results;
+            }),
+          );
+
+          const allEntries = processedChunks
+            .flat()
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          this.directoryCache.set(directoryPath, {
+            entries: allEntries,
+            timestamp: Date.now(),
+            size: allEntries.reduce((sum, entry) => sum + (entry.size || 0), 0),
+            includeDotFolders,
+          });
+
+          return this.formatDirectoryEntries(allEntries, level);
+        } catch (error) {
+          logger.error('Error generating file tree:', {
+            error,
+            directoryPath,
+          });
+          throw error;
+        }
+      },
+    );
   }
 
   private formatDirectoryEntries(
@@ -439,112 +477,70 @@ export class StreamingFileService extends FileService {
     includeDotFolders: boolean,
     options: ProcessingOptions,
   ): Promise<string> {
-    try {
-      // Clean up expired cache entries
-      await this.cleanupDirectoryCache();
-
-      // Build or get cached directory tree
-      const tree = await this.generateFileTree(
-        directoryPath,
-        rootPath,
-        includeDotFolders,
-        options,
-      );
-
-      // Process tree entries in parallel
-      const entries = this.parseTreeToEntries(tree, 0, directoryPath);
-      const processEntry = async (
-        entry: DirectoryEntry,
-      ): Promise<ProcessingResult> => {
-        if (options.cancelToken?.isCancellationRequested) {
-          return { content: '', path: entry.path };
-        }
-
+    const taskId = `combine_${directoryPath}`;
+    return this.progressService.withProgress(
+      taskId,
+      {
+        title: `Combining files in ${path.basename(directoryPath)}`,
+        cancellable: true,
+      },
+      async (
+        progress: vscode.Progress<{ message?: string; increment?: number }>,
+        token: vscode.CancellationToken,
+      ) => {
         try {
-          if (!entry.path) {
-            throw new Error('Invalid entry path');
-          }
+          const entries = await fsPromises.readdir(directoryPath, {
+            withFileTypes: true,
+          });
+          const validEntries = entries.filter(
+            (entry) => !this.shouldSkip(entry.name, includeDotFolders),
+          );
 
-          if (entry.isDirectory && entry.children) {
-            // Process directory entries in chunks to manage memory
-            const chunkSize = 5; // Process 5 files at a time
-            const chunks = Array.from(
-              { length: Math.ceil(entry.children.length / chunkSize) },
-              (_, i) =>
-                entry.children!.slice(i * chunkSize, (i + 1) * chunkSize),
-            );
+          let processedCount = 0;
+          let combinedContent = '';
 
-            let content = '';
-            for (const chunk of chunks) {
-              if (options.cancelToken?.isCancellationRequested) {
-                break;
-              }
-
-              const chunkResults = await Promise.all(chunk.map(processEntry));
-              content += chunkResults
-                .map((r) => r.content)
-                .filter(Boolean)
-                .join('');
-
-              // Force garbage collection after each chunk
-              await this.cleanupDirectoryCache();
+          for (const entry of validEntries) {
+            if (token.isCancellationRequested) {
+              break;
             }
 
-            return {
-              content: content
-                ? `\n// Directory: ${entry.name}\n${content}`
-                : '',
-              path: entry.path,
-            };
-          } else {
-            // For files, use streaming to minimize memory usage
-            const content = await this.readFileWithStream(entry.path);
-            return {
-              content: `\n// File: ${entry.name}\n${content}\n`,
-              path: entry.path,
-            };
+            const fullPath = path.join(directoryPath, entry.name);
+            const relativePath = path.relative(rootPath, fullPath);
+
+            if (entry.isDirectory()) {
+              const subContent = await this.combineFiles(
+                rootPath,
+                fullPath,
+                includeDotFolders,
+                options,
+              );
+              if (subContent) {
+                combinedContent += `\n// Directory: ${relativePath}\n${subContent}`;
+              }
+            } else {
+              try {
+                const content = await this.readFileWithStream(fullPath);
+                combinedContent += `\n// File: ${relativePath}\n${content}\n`;
+              } catch (error) {
+                logger.error('Error reading file:', { error, fullPath });
+              }
+            }
+
+            processedCount++;
+            this.progressService.updateProgress(taskId, {
+              current: processedCount,
+              total: validEntries.length,
+              message: `Combined ${processedCount} of ${validEntries.length} entries`,
+            });
           }
+
+          return combinedContent;
         } catch (error) {
-          logger.error('Error processing entry:', {
-            error,
-            path: entry.path,
-          });
-          return {
-            content: `\n// Error processing: ${entry.name}\n`,
-            path: entry.path,
-          };
+          logger.error('Error combining files:', { error, directoryPath });
+          throw error;
         }
-      };
-
-      // Process root entries in chunks
-      const chunkSize = 5; // Process 5 entries at a time
-      const chunks = Array.from(
-        { length: Math.ceil(entries.length / chunkSize) },
-        (_, i) => entries.slice(i * chunkSize, (i + 1) * chunkSize),
-      );
-
-      let result = '';
-      for (const chunk of chunks) {
-        if (options.cancelToken?.isCancellationRequested) {
-          break;
-        }
-
-        const chunkResults = await Promise.all(chunk.map(processEntry));
-        result += chunkResults
-          .sort((a, b) => a.path.localeCompare(b.path))
-          .map((r) => r.content)
-          .join('');
-
-        // Force garbage collection after each chunk
-        await this.cleanupDirectoryCache();
-      }
-
-      return result;
-    } catch (error) {
-      await this.cleanupAllStreams();
-      logger.error('Error combining files:', { error, directoryPath });
-      throw error;
-    }
+      },
+    );
   }
 
   // For testing

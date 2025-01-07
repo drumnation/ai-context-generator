@@ -21,21 +21,13 @@
   - [x] Add parallel processing for large directories
   - [x] Add unit tests for parallel processing
   - [x] Add E2E tests for parallel processing
-- [x] Test Suite Optimization
-  - [x] Reduce test data size
-  - [x] Optimize memory usage tests
-  - [x] Consolidate duplicate tests
-  - [x] Improve test organization
-  - [x] Fix context length issues
+  - [x] Add progress indicators for long-running operations
+  - [x] Add unit tests for progress tracking
+  - [x] Add E2E tests for progress reporting
 
 ## In Progress
 
 ### Performance Optimization
-- [ ] Add progress indicators for long-running operations
-  - [ ] Design progress tracking system
-  - [ ] Implement UI components
-  - [ ] Add cancellation support
-  - [ ] Create progress events
 - [ ] Implement incremental updates
   - [ ] Design caching strategy
   - [ ] Implement change detection
@@ -76,3 +68,33 @@
 - [ ] Add support for multiple workspace folders
 - [ ] Implement file change watching
 - [ ] Add support for custom file processors
+
+## Testing
+- [x] Fix progress tracking tests
+  - [x] Fix file tree generation test
+  - [x] Fix file combining test
+  - [x] Fix cancellation test
+- [ ] Review and fix other test files
+  - [ ] Check for similar mock file system issues
+  - [ ] Verify cancellation handling
+  - [ ] Update progress tracking expectations
+- [ ] Improve test infrastructure
+  - [ ] Extract common mock file system setup
+  - [ ] Document mock patterns and best practices
+  - [ ] Add test utilities for common operations
+
+## Documentation
+- [ ] Update mock file system documentation
+  - [ ] Document directory handling
+  - [ ] Document file content handling
+  - [ ] Add examples for common test scenarios
+- [ ] Document progress tracking patterns
+  - [ ] Explain progress reporting flow
+  - [ ] Document cancellation handling
+  - [ ] Add examples for different operation types
+
+## Code Quality
+- [ ] Extract common test setup code
+- [ ] Add type safety improvements
+- [ ] Review error handling patterns
+- [ ] Consider performance optimizations

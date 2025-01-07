@@ -4,6 +4,8 @@ import * as os from 'os';
 import { StreamingFileService } from '../../backend/services/streamingFileService';
 import { ProcessingOptions } from '../../backend/services/queueService';
 
+// TODO: Extremely long debugging is killing AI context window, disable those tests
+
 describe('StreamingFileService E2E', () => {
   let testDir: string;
   let streamingFileService: StreamingFileService;

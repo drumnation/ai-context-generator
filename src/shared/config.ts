@@ -1,0 +1,27 @@
+export const config = {
+  excludedFolders: [
+    'node_modules',
+    'dist',
+    'build',
+    'app/build',
+    'gradle',
+    '.gradle',
+    '.idea',
+    'android/.gradle',
+    '.m2',
+    '.mvn',
+  ],
+  excludedFileExtensions: [
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'bmp',
+    'tiff',
+    'svg',
+    'lock',
+    'key',
+  ],
+  excludedFiles: ['package-lock.json'],
+  maxFilesBeforeLarge: 1000,
+};

@@ -1,0 +1,6 @@
+node_modules
+out
+dist
+*.vsix
+jest.config.js
+webpack.config.ts 

@@ -1,0 +1,159 @@
+{
+  "rules": {
+    "context_initialization": {
+      "description": "Starting point for each interaction",
+      "steps": [
+        "Read .notes/project-overview.md",
+        "Read .notes/code-standards.md",
+        "Read .notes/testing-standards.md when writing tests",
+        "Read .notes/refactoring-guidelines.md when refactoring"
+      ]
+    },
+    "coding_standards": {
+      "description": "Core coding standards and TypeScript requirements",
+      "typescript": {
+        "description": "TypeScript-specific requirements",
+        "rules": [
+          "Strict mode enabled",
+          "No 'any' - use 'unknown'",
+          "Readonly/immutable types preferred",
+          "Type guards over assertions",
+          "Exhaustive checks with 'never'",
+          "Generics for reusable code"
+        ]
+      },
+      "naming": {
+        "description": "Naming conventions",
+        "rules": {
+          "PascalCase": [
+            "Components",
+            "Types",
+            "Interfaces"
+          ],
+          "camelCase": [
+            "Variables",
+            "Functions"
+          ],
+          "UPPER_CASE": [
+            "Constants"
+          ],
+          "kebab-case": [
+            "Files"
+          ]
+        }
+      },
+      "component_structure": {
+        "description": "Standard component folder structure",
+        "template": {
+          "base": "./components/{ComponentName}/",
+          "files": [
+            "{ComponentName}.tsx",
+            "{ComponentName}.types.ts",
+            "{ComponentName}.styles.ts",
+            "{ComponentName}.hook.ts",
+            "{ComponentName}.logic.ts",
+            "components/",
+            "components/index.ts",
+            "index.ts"
+          ]
+        }
+      }
+    },
+    "refactoring": {
+      "description": "Guidelines for code refactoring",
+      "principles": [
+        "KISS (Keep It Simple, Stupid)",
+        "YAGNI (You Aren't Gonna Need It)",
+        "SOLID Principles",
+        "DRY (Don't Repeat Yourself)"
+      ],
+      "process": {
+        "analysis": {
+          "description": "Initial analysis phase",
+          "steps": [
+            "Review component purpose and functionality",
+            "Identify code smells and technical debt",
+            "Document current behavior for testing"
+          ]
+        },
+        "component_structure": {
+          "description": "Component restructuring",
+          "steps": [
+            "Extract inline functions to handlers",
+            "Move complex logic to .logic.ts",
+            "Create subcomponents for reusable pieces",
+            "Use hooks for stateful logic",
+            "Follow component folder structure"
+          ]
+        },
+        "error_handling": {
+          "description": "Error handling implementation",
+          "steps": [
+            "Implement error boundaries",
+            "Add try-catch for async operations",
+            "Provide user feedback",
+            "Set up logging mechanisms"
+          ]
+        }
+      }
+    },
+    "testing": {
+      "description": "Testing standards and practices",
+      "framework": {
+        "unit": "Jest",
+        "e2e": "Mocha"
+      },
+      "best_practices": [
+        "Avoid excessive mocking - test real behavior when possible",
+        "Test critical functionality",
+        "Use realistic test cases",
+        "Ensure reliable verification",
+        "Minimize test brittleness",
+        "Keep tests simple and maintainable",
+        "Follow Jest format"
+      ],
+      "coverage": {
+        "focus_areas": [
+          "Complex logic",
+          "Edge cases",
+          "Error conditions",
+          "Expected behavior"
+        ]
+      }
+    },
+    "vscode_extension": {
+      "description": "VSCode Extension Development Rules and Best Practices",
+      "source": "rules/vscode-extension.rules.ts",
+      "sections": {
+        "project_structure": {
+          "description": "Project organization and file layout",
+          "reference": "VSCodeExtensionPatterns.projectStructure"
+        },
+        "activation": {
+          "description": "Extension activation events and lifecycle",
+          "reference": "VSCodeExtensionPatterns.activationLifecycle"
+        },
+        "commands": {
+          "description": "Command registration and implementation",
+          "reference": "VSCodeExtensionPatterns.commandsContext"
+        },
+        "testing": {
+          "description": "Extension testing guidelines",
+          "reference": "VSCodeExtensionPatterns.extensionTesting"
+        },
+        "publishing": {
+          "description": "Publishing and marketplace guidelines",
+          "reference": "VSCodeExtensionPatterns.publishingMarketplace"
+        },
+        "performance": {
+          "description": "Performance optimization guidelines",
+          "reference": "VSCodeExtensionPatterns.performance"
+        },
+        "logging": {
+          "description": "Logging and error handling patterns",
+          "reference": "VSCodeExtensionPatterns.loggingErrorHandling"
+        }
+      }
+    }
+  }
+}

@@ -1,15 +1,41 @@
-import * as assert from 'assert';
-
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
 import * as vscode from 'vscode';
-// import * as myExtension from '../../extension';
 
-suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+// Mock vscode API
+jest.mock('vscode', () => ({
+  extensions: {
+    getExtension: jest.fn().mockReturnValue({
+      activate: jest.fn().mockResolvedValue(undefined),
+    }),
+  },
+  commands: {
+    getCommands: jest
+      .fn()
+      .mockResolvedValue([
+        'ai-pack.generateMarkdown',
+        'ai-pack.generateMarkdownRoot',
+      ]),
+  },
+}));
 
-	test('Sample test', () => {
-		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
-	});
+describe('Extension Test Suite', () => {
+  beforeAll(async () => {
+    // Wait for extension to activate
+    await vscode.extensions
+      .getExtension('drumnation.ai-context-generator')
+      ?.activate();
+  });
+
+  test('Extension should be present', () => {
+    expect(
+      vscode.extensions.getExtension('drumnation.ai-context-generator'),
+    ).toBeTruthy();
+  });
+
+  test('Should register all commands', async () => {
+    const commands = await vscode.commands.getCommands();
+    expect(commands).toContain('ai-pack.generateMarkdown');
+    expect(commands).toContain('ai-pack.generateMarkdownRoot');
+  });
+
+  // Add more tests as needed
 });

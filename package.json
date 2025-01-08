@@ -63,6 +63,7 @@
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "lint": "eslint src --ext ts && eslint src/test src/**/__tests__ --ext ts --config .eslintrc.test.json",
     "test": "jest --config jest.config.js",
+    "test:quiet": "jest --config jest.config.js --silent --verbose false",
     "test:watch": "jest --config jest.config.js --watch",
     "vsc-package": "pnpm run build && vsce package",
     "publish": "pnpm run package && vsce publish --pat $VSCPAT",

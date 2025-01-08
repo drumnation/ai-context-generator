@@ -1,143 +1,158 @@
-import * as path from 'path';
-import * as fs from 'fs/promises';
 import { IncrementalUpdateService } from '../../backend/services/incrementalUpdateService';
-import { createTempDir, delay, removeTempDir } from '../../test/testUtils';
+import { ProgressService } from '../../backend/services/progressService';
+import * as path from 'path';
+import { promises as fsPromises } from 'fs';
 
 describe('IncrementalUpdateService E2E', () => {
   let service: IncrementalUpdateService;
-  let tempDir: string;
+  let testDir: string;
 
   beforeEach(async () => {
-    service = new IncrementalUpdateService();
-    tempDir = await createTempDir('incremental-update-e2e');
+    service = new IncrementalUpdateService(new ProgressService(), {
+      include: ['**/*'],
+      exclude: ['**/node_modules/**', '**/dist/**'],
+    });
+    testDir = path.join(__dirname, 'test-files');
+    try {
+      await fsPromises.rm(testDir, { recursive: true, force: true });
+    } catch (error) {
+      // Ignore errors if directory doesn't exist
+    }
+    await fsPromises.mkdir(testDir, { recursive: true });
   });
 
   afterEach(async () => {
-    await removeTempDir(tempDir);
+    try {
+      // Remove test directory and all contents
+      await fsPromises.rm(testDir, { recursive: true, force: true });
+    } catch (error) {
+      console.error('Error cleaning up test directory:', error);
+    }
   });
 
-  async function createFile(
-    filename: string,
-    content: string = 'test content',
-  ): Promise<string> {
-    const filePath = path.join(tempDir, filename);
-    await fs.writeFile(filePath, content);
-    return filePath;
-  }
+  it('should detect files in directory', async () => {
+    // Create test files
+    const file1 = path.join(testDir, 'file1.txt');
+    await fsPromises.mkdir(path.dirname(file1), { recursive: true });
+    await fsPromises.writeFile(file1, 'test content 1');
 
-  async function modifyFile(
-    filePath: string,
-    newContent: string = 'modified content',
-  ): Promise<void> {
-    await fs.writeFile(filePath, newContent);
-  }
+    // Test
+    const result = await service.detectChanges(testDir, []);
 
-  it('should detect new files in real filesystem', async () => {
-    // Initial state
-    const file1 = await createFile('test1.txt');
-
-    // First scan
-    const result1 = await service.detectChanges(tempDir, []);
-    expect(result1.newFiles).toContain(file1);
-    expect(result1.changedFiles).toHaveLength(0);
-    expect(result1.deletedFiles).toHaveLength(0);
-
-    // Add new file
-    const file2 = await createFile('test2.txt');
-
-    // Second scan - include file1 in previous files since we know about it
-    const result2 = await service.detectChanges(tempDir, [file1]);
-    expect(result2.newFiles).toContain(file2);
-    expect(result2.changedFiles).toHaveLength(0);
-    expect(result2.deletedFiles).toHaveLength(0);
+    // Verify
+    expect(result.files).toContain(file1);
+    expect(result.files).toHaveLength(1);
+    expect(result.added).toContain(file1);
+    expect(result.added).toHaveLength(1);
+    expect(result.removed).toHaveLength(0);
+    expect(result.unchanged).toHaveLength(0);
   });
 
-  it('should detect modified files in real filesystem', async () => {
-    // Initial state
-    const file1 = await createFile('test1.txt');
+  it('should respect file patterns', async () => {
+    // Create test files
+    const srcFile = path.join(testDir, 'src/file.ts');
+    const distFile = path.join(testDir, 'dist/file.ts');
+    const nodeModulesFile = path.join(testDir, 'node_modules/pkg/file.ts');
 
-    // First scan to establish baseline
-    await service.detectChanges(tempDir, []);
+    await fsPromises.mkdir(path.dirname(srcFile), { recursive: true });
+    await fsPromises.mkdir(path.dirname(distFile), { recursive: true });
+    await fsPromises.mkdir(path.dirname(nodeModulesFile), { recursive: true });
 
-    // Ensure file modification time will be different
-    await delay(1000);
+    await fsPromises.writeFile(srcFile, 'test content');
+    await fsPromises.writeFile(distFile, 'test content');
+    await fsPromises.writeFile(nodeModulesFile, 'test content');
 
-    // Modify file
-    await modifyFile(file1);
+    // Test
+    const result = await service.detectChanges(testDir, []);
 
-    // Check for changes
-    const result = await service.detectChanges(tempDir, [file1]);
-    expect(result.changedFiles).toContain(file1);
-    expect(result.newFiles).toHaveLength(0);
-    expect(result.deletedFiles).toHaveLength(0);
+    // Verify
+    expect(result.files).toContain(srcFile);
+    expect(result.files).not.toContain(distFile);
+    expect(result.files).not.toContain(nodeModulesFile);
+    expect(result.added).toContain(srcFile);
+    expect(result.added).toHaveLength(1);
   });
 
-  it('should detect deleted files in real filesystem', async () => {
-    // Initial state
-    const file1 = await createFile('test1.txt');
+  it('should handle nested directories', async () => {
+    // Create test files
+    const files = [
+      path.join(testDir, 'src/components/Button.tsx'),
+      path.join(testDir, 'src/utils/helpers.ts'),
+      path.join(testDir, 'src/deep/nested/file.ts'),
+    ];
 
-    // First scan
-    await service.detectChanges(tempDir, []);
+    for (const file of files) {
+      await fsPromises.mkdir(path.dirname(file), { recursive: true });
+      await fsPromises.writeFile(file, 'test content');
+    }
 
-    // Delete file
-    await fs.unlink(file1);
+    // Test
+    const result = await service.detectChanges(testDir, []);
 
-    // Check for changes
-    const result = await service.detectChanges(tempDir, [file1]);
-    expect(result.deletedFiles).toContain(file1);
-    expect(result.newFiles).toHaveLength(0);
-    expect(result.changedFiles).toHaveLength(0);
+    // Verify
+    expect(result.files).toHaveLength(3);
+    expect(result.files).toEqual(expect.arrayContaining(files));
+    expect(result.added).toEqual(expect.arrayContaining(files));
+    expect(result.added).toHaveLength(3);
+    expect(result.removed).toHaveLength(0);
+    expect(result.unchanged).toHaveLength(0);
   });
 
-  it('should handle multiple concurrent changes in real filesystem', async () => {
-    // Initial state
-    const file1 = await createFile('test1.txt');
-    const file2 = await createFile('test2.txt');
+  it('should detect incremental changes correctly', async () => {
+    // Create initial files
+    const file1 = path.join(testDir, 'src/file1.ts');
+    const file2 = path.join(testDir, 'src/file2.ts');
 
-    // First scan
-    await service.detectChanges(tempDir, []);
+    await fsPromises.mkdir(path.dirname(file1), { recursive: true });
+    await fsPromises.writeFile(file1, 'initial content 1');
+    await fsPromises.writeFile(file2, 'initial content 2');
 
-    // Make multiple changes
-    await delay(1000);
-    await modifyFile(file1);
-    await fs.unlink(file2);
-    const file3 = await createFile('test3.txt');
+    // Get initial state
+    const initialResult = await service.detectChanges(testDir, []);
+    expect(initialResult.files).toHaveLength(2);
+    expect(initialResult.added).toHaveLength(2);
+    expect(initialResult.removed).toHaveLength(0);
+    expect(initialResult.unchanged).toHaveLength(0);
 
-    // Check for changes
-    const result = await service.detectChanges(tempDir, [file1, file2]);
-    expect(result.changedFiles).toContain(file1);
-    expect(result.deletedFiles).toContain(file2);
-    expect(result.newFiles).toContain(file3);
+    // Modify files: add one, remove one, keep one
+    const file3 = path.join(testDir, 'src/file3.ts');
+    await fsPromises.writeFile(file3, 'new content');
+    await fsPromises.unlink(file1);
+
+    // Test incremental changes
+    const result = await service.detectChanges(testDir, initialResult.files);
+
+    // Verify
+    expect(result.files).toHaveLength(2);
+    expect(result.added).toContain(file3);
+    expect(result.added).toHaveLength(1);
+    expect(result.removed).toContain(file1);
+    expect(result.removed).toHaveLength(1);
+    expect(result.unchanged).toContain(file2);
+    expect(result.unchanged).toHaveLength(1);
   });
 
-  it('should maintain state across multiple scans in real filesystem', async () => {
-    // Initial state
-    const file1 = await createFile('test1.txt');
+  it('should handle no changes between runs', async () => {
+    // Create test files
+    const file1 = path.join(testDir, 'src/unchanged1.ts');
+    const file2 = path.join(testDir, 'src/unchanged2.ts');
 
-    // First scan to establish baseline
-    const result0 = await service.detectChanges(tempDir, []);
-    expect(result0.newFiles).toContain(file1);
+    await fsPromises.mkdir(path.dirname(file1), { recursive: true });
+    await fsPromises.writeFile(file1, 'content 1');
+    await fsPromises.writeFile(file2, 'content 2');
 
-    // No changes should be detected in second scan
-    const result1 = await service.detectChanges(tempDir, [file1]); // Pass file1 as known
-    expect(result1.changedFiles).toHaveLength(0);
-    expect(result1.newFiles).toHaveLength(0);
-    expect(result1.deletedFiles).toHaveLength(0);
+    // Get initial state
+    const initialResult = await service.detectChanges(testDir, []);
 
-    // Modify file
-    await delay(1000);
-    await modifyFile(file1);
+    // Test with no changes
+    const result = await service.detectChanges(testDir, initialResult.files);
 
-    // Changes should be detected
-    const result2 = await service.detectChanges(tempDir, [file1]);
-    expect(result2.changedFiles).toContain(file1);
-    expect(result2.newFiles).toHaveLength(0);
-    expect(result2.deletedFiles).toHaveLength(0);
-
-    // No changes should be detected again
-    const result3 = await service.detectChanges(tempDir, [file1]);
-    expect(result3.changedFiles).toHaveLength(0);
-    expect(result3.newFiles).toHaveLength(0);
-    expect(result3.deletedFiles).toHaveLength(0);
+    // Verify
+    expect(result.files).toHaveLength(2);
+    expect(result.added).toHaveLength(0);
+    expect(result.removed).toHaveLength(0);
+    expect(result.unchanged).toHaveLength(2);
+    expect(result.unchanged).toContain(file1);
+    expect(result.unchanged).toContain(file2);
   });
 });

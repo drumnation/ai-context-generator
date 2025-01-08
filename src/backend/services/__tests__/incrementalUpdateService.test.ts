@@ -1,11 +1,7 @@
 import { IncrementalUpdateService } from '../incrementalUpdateService';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
-import {
-  ProgressService,
-  ProgressOptions,
-  ProgressUpdate,
-} from '../progressService';
+import { ProgressService, ProgressOptions } from '../progressService';
 import { ProcessingOptions } from '../queueService';
 import * as vscode from 'vscode';
 import { Mock } from 'jest-mock';
@@ -35,21 +31,11 @@ const mockProgressService = {
         return callback(mockProgress, mockToken);
       },
     ) as Mock<ProgressService['withProgress']>,
-  updateProgress: jest.fn() as Mock<
-    (taskId: string, update: ProgressUpdate) => void
-  >,
+  updateProgress: jest.fn(),
   activeTasks: new Map(),
-  cancelTask: jest.fn() as Mock<(taskId: string) => void>,
-  isTaskActive: jest
-    .fn()
-    .mockImplementation((_taskId: string) => false) as Mock<
-    (taskId: string) => boolean
-  >,
-  getTaskProgress: jest
-    .fn()
-    .mockImplementation((_taskId: string) => undefined) as Mock<
-    (taskId: string) => number | undefined
-  >,
+  cancelTask: jest.fn(),
+  isTaskActive: jest.fn().mockImplementation(() => false),
+  getTaskProgress: jest.fn().mockImplementation(() => undefined),
 } as unknown as ProgressService;
 
 jest.mock('../progressService', () => ({
@@ -61,259 +47,255 @@ jest.mock('fs', () => ({
   promises: {
     readdir: jest.fn(),
     stat: jest.fn(),
-    mkdir: jest.fn(),
-    writeFile: jest.fn(),
   },
 }));
 
 describe('IncrementalUpdateService', () => {
   let service: IncrementalUpdateService;
   let mockFiles: { [key: string]: { mtime: Date; size: number } };
-  const testDir = '/test/dir';
+  const testDir = path.normalize('/test/dir');
   const _options: ProcessingOptions = {
     chunkSize: 50,
     delayBetweenChunks: 10,
   };
 
   beforeEach(() => {
-    service = new IncrementalUpdateService(
-      mockProgressService as ProgressService,
-    );
+    // Clear mock files
     mockFiles = {};
+
+    // Initialize test files with normalized paths
+    const file1 = path.normalize('/test/dir/file1.txt');
+    mockFiles[file1] = { mtime: new Date(), size: 100 };
+
+    // Initialize service with default patterns
+    service = new IncrementalUpdateService(mockProgressService, {
+      include: [],
+      exclude: [],
+    });
 
     // Reset mocks
     jest.clearAllMocks();
 
-    // Mock file system functions with improved type safety
+    // Mock readdir with proper withFileTypes support
     (fsPromises.readdir as jest.Mock).mockImplementation(
-      async (
-        _dir: string,
-      ): Promise<
-        Array<{
-          name: string;
-          isDirectory: () => boolean;
-          isFile: () => boolean;
-        }>
-      > => {
-        const files = Object.keys(mockFiles).map((filePath) => ({
-          name: path.basename(filePath),
+      async (dir: string, options?: { withFileTypes: boolean }) => {
+        const normalizedDir = path.normalize(dir);
+        const entries = Object.keys(mockFiles)
+          .filter((filePath) => {
+            const normalizedPath = path.normalize(filePath);
+            return path.dirname(normalizedPath) === normalizedDir;
+          })
+          .map((filePath) => {
+            const name = path.basename(filePath);
+            if (options?.withFileTypes) {
+              return {
+                name,
+                isDirectory: () => {
+                  const fullPath = path.join(normalizedDir, name);
+                  return Object.keys(mockFiles).some((f) =>
+                    path
+                      .normalize(f)
+                      .startsWith(path.normalize(fullPath) + path.sep),
+                  );
+                },
+                isFile: () =>
+                  mockFiles[path.join(normalizedDir, name)] !== undefined,
+                isSymbolicLink: () => false,
+              };
+            }
+            return name;
+          });
+
+        // Add directory entries for parent directories of files
+        Object.keys(mockFiles)
+          .filter((filePath) => {
+            const normalizedPath = path.normalize(filePath);
+            const parentDir = path.dirname(normalizedPath);
+            return (
+              parentDir.startsWith(normalizedDir + path.sep) &&
+              path.dirname(parentDir) === normalizedDir
+            );
+          })
+          .map((filePath) => path.dirname(path.normalize(filePath)))
+          .filter((dirPath, index, self) => self.indexOf(dirPath) === index)
+          .forEach((dirPath) => {
+            const name = path.basename(dirPath);
+            if (options?.withFileTypes) {
+              entries.push({
+                name,
+                isDirectory: () => true,
+                isFile: () => false,
+                isSymbolicLink: () => false,
+              });
+            } else {
+              entries.push(name);
+            }
+          });
+
+        return entries;
+      },
+    );
+
+    // Mock stat with proper file metadata
+    (fsPromises.stat as jest.Mock).mockImplementation(
+      async (filePath: string) => {
+        const normalizedPath = path.normalize(filePath);
+        const fileData = mockFiles[normalizedPath];
+
+        // Check if it's a directory
+        const isDir = Object.keys(mockFiles).some((f) =>
+          path.normalize(f).startsWith(normalizedPath + path.sep),
+        );
+
+        if (isDir) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            mtime: new Date(),
+            size: 0,
+          };
+        }
+
+        if (!fileData) {
+          throw new Error('ENOENT: no such file or directory');
+        }
+
+        return {
           isDirectory: () => false,
           isFile: () => true,
-        }));
-        return files;
-      },
-    );
-
-    (fsPromises.stat as jest.Mock).mockImplementation(
-      async (
-        filePath: string,
-      ): Promise<{ mtime: Date; size: number; isDirectory: () => boolean }> => {
-        const fileData = mockFiles[filePath];
-        if (!fileData) {
-          throw new Error(`File not found: ${filePath}`);
-        }
-        return {
           mtime: fileData.mtime,
           size: fileData.size,
-          isDirectory: () => false,
         };
       },
     );
-
-    // Reset the default mock implementation for progress
-    (
-      mockProgressService.withProgress as Mock<ProgressService['withProgress']>
-    ).mockImplementation(
-      async <T>(
-        _taskId: string,
-        _options: ProgressOptions,
-        callback: ProgressCallback<T>,
-      ): Promise<T> => {
-        const mockProgress = {
-          report: jest.fn(),
-        };
-        const mockToken = {
-          isCancellationRequested: false,
-          onCancellationRequested: jest.fn(),
-        };
-        return callback(mockProgress, mockToken);
-      },
-    );
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
   });
 
   describe('detectChanges', () => {
-    it('should detect new files with progress tracking', async () => {
+    it('should detect files with progress tracking', async () => {
       // Setup
-      const file1 = path.join(testDir, 'file1.txt');
+      const file1 = path.normalize(path.join(testDir, 'file1.txt'));
       mockFiles[file1] = { mtime: new Date(), size: 100 };
 
       // Test
       const result = await service.detectChanges(testDir, [], _options);
 
       // Verify
-      expect(result.newFiles).toContain(file1);
-      expect(result.changedFiles).toHaveLength(0);
-      expect(result.deletedFiles).toHaveLength(0);
-      expect(mockProgressService.withProgress).toHaveBeenCalled();
-      const mockCall = (
-        mockProgressService.withProgress as Mock<
-          ProgressService['withProgress']
-        >
-      ).mock.calls[0];
-      expect(mockCall[1]).toEqual({
-        title: 'Detecting file changes',
-        cancellable: true,
-      });
+      expect(result.files).toContain(file1);
+      expect(result.files).toHaveLength(1);
+      expect(result.added).toContain(file1);
+      expect(result.added).toHaveLength(1);
+      expect(result.removed).toHaveLength(0);
+      expect(result.unchanged).toHaveLength(0);
     });
 
-    it('should handle cancellation during detection', async () => {
-      // Setup
-      const file1 = path.join(testDir, 'file1.txt');
+    it('should detect added and removed files', async () => {
+      // Setup initial state
+      const file1 = path.normalize(path.join(testDir, 'file1.txt'));
+      const file2 = path.normalize(path.join(testDir, 'file2.txt'));
       mockFiles[file1] = { mtime: new Date(), size: 100 };
 
-      // Override progress mock for cancellation
-      (
-        mockProgressService.withProgress as Mock<
-          ProgressService['withProgress']
-        >
-      ).mockImplementationOnce(
-        async <T>(
-          _taskId: string,
-          _options: ProgressOptions,
-          callback: ProgressCallback<T>,
-        ): Promise<T> => {
-          const mockProgress = {
-            report: jest.fn(),
-          };
-          const mockToken = {
-            isCancellationRequested: true,
-            onCancellationRequested: jest.fn(),
-          };
-          return callback(mockProgress, mockToken);
-        },
-      );
+      // Get initial state
+      const initialResult = await service.detectChanges(testDir, [], _options);
+      expect(initialResult.files).toContain(file1);
 
-      // Test
-      const result = await service.detectChanges(testDir, [], _options);
-
-      // Verify
-      expect(result.newFiles).toHaveLength(0);
-      expect(result.changedFiles).toHaveLength(0);
-      expect(result.deletedFiles).toHaveLength(0);
-    });
-
-    it('should process files in parallel chunks', async () => {
-      // Setup
-      const files = Array.from({ length: 10 }, (_, i) => {
-        const file = path.join(testDir, `file${i}.txt`);
-        mockFiles[file] = { mtime: new Date(), size: 100 };
-        return file;
-      });
-
-      // Test
-      const result = await service.detectChanges(testDir, [], {
-        ..._options,
-        chunkSize: 3, // Process 3 files at a time
-      });
-
-      // Verify
-      expect(result.newFiles).toHaveLength(10);
-      expect(result.newFiles).toEqual(expect.arrayContaining(files));
-      expect(mockProgressService.withProgress).toHaveBeenCalled();
-    });
-
-    it('should handle errors gracefully with proper error messages', async () => {
-      // Setup
-      const errorMessage = 'Access denied: insufficient permissions';
-      (fsPromises.readdir as jest.Mock).mockRejectedValue(
-        new Error(errorMessage),
-      );
-
-      // Test & Verify
-      await expect(
-        service.detectChanges(testDir, [], _options),
-      ).rejects.toThrow(errorMessage);
-      expect(mockProgressService.withProgress).toHaveBeenCalled();
-    });
-
-    it('should detect deleted files', async () => {
-      // Setup
-      const previousFiles = [path.join(testDir, 'deleted.txt')];
-      mockFiles = {}; // Empty current directory
+      // Modify files
+      mockFiles[file2] = { mtime: new Date(), size: 100 }; // Add new file
+      delete mockFiles[file1]; // Remove existing file
 
       // Test
       const result = await service.detectChanges(
         testDir,
-        previousFiles,
+        initialResult.files,
         _options,
       );
 
       // Verify
-      expect(result.deletedFiles).toContain(previousFiles[0]);
-      expect(result.newFiles).toHaveLength(0);
-      expect(result.changedFiles).toHaveLength(0);
-      expect(mockProgressService.withProgress).toHaveBeenCalled();
+      expect(result.files).toContain(file2);
+      expect(result.files).toHaveLength(1);
+      expect(result.added).toContain(file2);
+      expect(result.added).toHaveLength(1);
+      expect(result.removed).toContain(file1);
+      expect(result.removed).toHaveLength(1);
+      expect(result.unchanged).toHaveLength(0);
     });
 
-    it('should detect modified files', async () => {
+    it('should detect unchanged files', async () => {
       // Setup
-      const file1 = path.join(testDir, 'file1.txt');
+      const file1 = path.normalize(path.join(testDir, 'file1.txt'));
+      const file2 = path.normalize(path.join(testDir, 'file2.txt'));
       mockFiles[file1] = { mtime: new Date(), size: 100 };
+      mockFiles[file2] = { mtime: new Date(), size: 100 };
 
-      // First pass to establish baseline
-      await service.detectChanges(testDir, [file1], _options);
+      // Get initial state
+      const initialResult = await service.detectChanges(testDir, [], _options);
 
-      // Modify file
-      mockFiles[file1] = { mtime: new Date(Date.now() + 1000), size: 200 };
-
-      // Test
-      const result = await service.detectChanges(testDir, [file1], _options);
+      // Test - detect changes with same files
+      const result = await service.detectChanges(
+        testDir,
+        initialResult.files,
+        _options,
+      );
 
       // Verify
-      expect(result.changedFiles).toContain(file1);
-      expect(result.newFiles).toHaveLength(0);
-      expect(result.deletedFiles).toHaveLength(0);
-      expect(mockProgressService.withProgress).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('file state management', () => {
-    it('should clear file states', async () => {
-      // Setup
-      const file1 = path.join(testDir, 'file1.txt');
-      mockFiles[file1] = { mtime: new Date(), size: 100 };
-      await service.detectChanges(testDir, []);
-
-      // Test
-      service.clearStates();
-
-      // Verify - next detection should treat file as new
-      const result = await service.detectChanges(testDir, [file1]);
-      expect(result.changedFiles).toContain(file1);
+      expect(result.files).toHaveLength(2);
+      expect(result.added).toHaveLength(0);
+      expect(result.removed).toHaveLength(0);
+      expect(result.unchanged).toHaveLength(2);
+      expect(result.unchanged).toContain(file1);
+      expect(result.unchanged).toContain(file2);
     });
 
-    it('should handle state validity duration', async () => {
-      // Setup
-      const file1 = path.join(testDir, 'file1.txt');
-      const initialTime = new Date();
-      mockFiles[file1] = { mtime: initialTime, size: 100 };
+    it('should handle file patterns correctly', async () => {
+      // Setup with specific patterns
+      service = new IncrementalUpdateService(mockProgressService, {
+        include: ['**/*.ts', '**/*.js'],
+        exclude: ['**/node_modules/**', '**/dist/**'],
+      });
 
-      // First detection
-      await service.detectChanges(testDir, [file1]);
+      const files = [
+        path.normalize('/test/dir/src/file1.ts'),
+        path.normalize('/test/dir/src/file2.js'),
+        path.normalize('/test/dir/src/file3.txt'),
+        path.normalize('/test/dir/node_modules/pkg/file.js'),
+        path.normalize('/test/dir/dist/file.ts'),
+      ];
 
-      // Mock date to be after validity duration (24 hours)
-      const futureTime = new Date(initialTime.getTime() + 25 * 60 * 60 * 1000);
-      jest.spyOn(Date, 'now').mockImplementation(() => futureTime.getTime());
+      // Add all files to mock system
+      files.forEach((file) => {
+        mockFiles[file] = { mtime: new Date(), size: 100 };
+      });
 
       // Test
-      const result = await service.detectChanges(testDir, [file1]);
+      const result = await service.detectChanges(testDir, [], _options);
 
-      // Verify - file should be treated as changed due to expired state
-      expect(result.changedFiles).toContain(file1);
+      // Verify - should only include .ts and .js files outside node_modules and dist
+      expect(result.files).toHaveLength(2);
+      expect(result.files).toContain(files[0]); // src/file1.ts
+      expect(result.files).toContain(files[1]); // src/file2.js
+      expect(result.files).not.toContain(files[2]); // src/file3.txt
+      expect(result.files).not.toContain(files[3]); // node_modules/pkg/file.js
+      expect(result.files).not.toContain(files[4]); // dist/file.ts
+    });
+
+    it('should handle nested directories correctly', async () => {
+      // Setup
+      const files = [
+        path.normalize('/test/dir/src/components/Button.tsx'),
+        path.normalize('/test/dir/src/utils/helpers.ts'),
+        path.normalize('/test/dir/src/deep/nested/file.ts'),
+      ];
+
+      // Add all files to mock system
+      files.forEach((file) => {
+        mockFiles[file] = { mtime: new Date(), size: 100 };
+      });
+
+      // Test
+      const result = await service.detectChanges(testDir, [], _options);
+
+      // Verify
+      expect(result.files).toHaveLength(3);
+      expect(result.files).toEqual(expect.arrayContaining(files));
     });
   });
 

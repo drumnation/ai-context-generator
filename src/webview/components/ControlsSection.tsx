@@ -4,7 +4,8 @@ import {
   VSCodeCheckbox,
   VSCodeRadioGroup,
   VSCodeRadio,
-} from '@vscode/webview-ui-toolkit/react';
+  VSCodeChangeEvent,
+} from '../components/VSCodeComponents';
 import { useAppContext } from '../contexts/AppContext';
 import { vscode } from '../utils/vscode-api';
 
@@ -29,7 +30,7 @@ const ControlsSection: React.FC = () => {
         <VSCodeRadioGroup
           orientation="horizontal"
           value={mode}
-          onChange={(e) =>
+          onChange={(e: VSCodeChangeEvent) =>
             handleModeChange(
               (e.target as HTMLInputElement).value as 'directory' | 'root',
             )
@@ -46,7 +47,7 @@ const ControlsSection: React.FC = () => {
       <VSCodeCheckbox
         id="toggleFiles"
         checked={allFilesChecked}
-        onChange={(e) =>
+        onChange={(e: VSCodeChangeEvent) =>
           handleToggleFiles((e.target as HTMLInputElement).checked)
         }
       >

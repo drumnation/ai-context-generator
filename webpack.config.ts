@@ -1,8 +1,20 @@
 import * as path from "path";
-import * as webpack from "webpack";
+import type { Configuration, DefinePlugin } from 'webpack';
 import CopyWebpackPlugin from "copy-webpack-plugin";
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
-const extensionConfig: webpack.Configuration = {
+// Create a require function for CommonJS modules
+const require = createRequire(import.meta.url);
+
+// Require webpack using the created function for runtime
+const webpack = require('webpack');
+
+// Get the directory name in an ES module context
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const extensionConfig: Configuration = {
   target: "node",
   mode: "none",
   entry: "./src/extension.ts",
@@ -40,7 +52,7 @@ const extensionConfig: webpack.Configuration = {
   devtool: "source-map"
 };
 
-const webviewConfig: webpack.Configuration = {
+const webviewConfig: Configuration = {
   target: "web",
   mode: "none",
   entry: "./src/webview/index.tsx",
@@ -51,7 +63,7 @@ const webviewConfig: webpack.Configuration = {
   resolve: {
     extensions: [".ts", ".js", ".tsx", ".jsx"],
     fallback: {
-      path: require.resolve("path-browserify")
+      path: "path-browserify"
     }
   },
   plugins: [
@@ -75,7 +87,7 @@ const webviewConfig: webpack.Configuration = {
           {
             loader: "ts-loader",
             options: {
-              configFile: "tsconfig.json"
+              configFile: "tsconfig.webview.json"
             }
           }
         ]

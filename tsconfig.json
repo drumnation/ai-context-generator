@@ -1,33 +1,18 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "CommonJS",
     "target": "ES2020",
     "outDir": "out",
-    "lib": [
-      "ES2020",
-      "DOM"
-    ],
+    "lib": ["ES2020", "DOM"],
     "sourceMap": true,
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react",
-    "types": [
-      "node",
-      "jest",
-      "vscode",
-      "mocha"
-    ],
-    "moduleResolution": "node"
+    "types": ["node", "jest", "vscode", "mocha"],
+    "moduleResolution": "Node"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    ".vscode-test",
-    "out",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", ".vscode-test", "out", "dist"]
 }

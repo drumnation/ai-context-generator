@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react",
+    "lib": ["ES2020", "DOM"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src/webview/**/*"],
+  "exclude": ["node_modules", ".vscode-test", "out", "dist"]
+}

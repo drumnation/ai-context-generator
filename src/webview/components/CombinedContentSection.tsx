@@ -1,5 +1,9 @@
 import React from 'react';
-import { VSCodeButton, VSCodeCheckbox } from '@vscode/webview-ui-toolkit/react';
+import {
+  VSCodeButton,
+  VSCodeCheckbox,
+  VSCodeChangeEvent,
+} from '../components/VSCodeComponents';
 import { useAppContext } from '../contexts/AppContext';
 import { vscode } from '../utils/vscode-api';
 
@@ -35,7 +39,7 @@ const CombinedContentSection: React.FC = () => {
         {!isRoot && mode === 'directory' && (
           <VSCodeCheckbox
             style={{ marginLeft: '10px' }}
-            onChange={(e) =>
+            onChange={(e: VSCodeChangeEvent) =>
               handleToggleRootCombined((e.target as HTMLInputElement).checked)
             }
           >

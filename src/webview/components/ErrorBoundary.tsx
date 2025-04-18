@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { VSCodeButton } from '@vscode/webview-ui-toolkit/react';
+import { VSCodeButton } from '../components/VSCodeComponents';
 import { vscode } from '../utils/vscode-api';
 import { logger } from '../../shared/logger';
 

@@ -3,7 +3,7 @@ import ControlsSection from './ControlsSection';
 import FileTreeSection from './FileTreeSection';
 import CombinedContentSection from './CombinedContentSection';
 import ErrorMessageSection from './ErrorMessageSection';
-import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react';
+import { VSCodeProgressRing } from '../components/VSCodeComponents';
 import { useAppContext } from '../contexts/AppContext';
 import { logger } from '../../shared/logger';
 

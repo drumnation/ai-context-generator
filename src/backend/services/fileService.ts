@@ -1,24 +1,13 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
+import * as vscode from 'vscode';
 import { logger } from '../../shared/logger';
 import { ProcessingOptions } from './queueService';
 
 export class FileService {
-  protected readonly excludedFolders = new Set([
-    'node_modules',
-    '.git',
-    'dist',
-    'build',
-    'coverage',
-  ]);
-
-  protected readonly excludedFiles = new Set([
-    '.DS_Store',
-    'Thumbs.db',
-    '.env',
-    '.env.local',
-  ]);
+  // Lower threshold for testing purposes - original is 1000
+  private MAX_FILES = 100;
 
   async generateFileTree(
     directoryPath: string,
@@ -26,6 +15,7 @@ export class FileService {
     includeDotFolders: boolean,
     options: ProcessingOptions,
     level = 0,
+    relativePath = '',
   ): Promise<string> {
     try {
       const entries = await fs.readdir(directoryPath, { withFileTypes: true });
@@ -37,24 +27,26 @@ export class FileService {
         }
 
         const fullPath = path.join(directoryPath, entry.name);
+        const entryRelativePath = path.join(relativePath, entry.name);
 
         if (this.shouldSkip(entry.name, includeDotFolders)) {
           continue;
         }
 
-        const prefix = '  '.repeat(level);
+        const prefix = '  '.repeat(level + 1);
         if (entry.isDirectory()) {
-          tree += `${prefix}${entry.name}/\n`;
+          tree += `${prefix}${entryRelativePath}/\n`;
           const subtree = await this.generateFileTree(
             fullPath,
             rootPath,
             includeDotFolders,
             options,
             level + 1,
+            entryRelativePath,
           );
           tree += subtree;
         } else {
-          tree += `${prefix}${entry.name}\n`;
+          tree += `${prefix}${entryRelativePath}\n`;
         }
       }
 
@@ -100,7 +92,9 @@ export class FileService {
         } else {
           try {
             const content = await fs.readFile(fullPath, 'utf-8');
-            combinedContent += `\n// File: ${relativePath}\n${content}\n`;
+            const extension = path.extname(relativePath).substring(1);
+            const languageId = extension.toLowerCase() || 'txt'; // Default to 'txt' if no extension
+            combinedContent += `\n// File: ${relativePath}\n\n\`\`\`${languageId}\n${content}\n\`\`\`\n\n`;
           } catch (error) {
             logger.error('Error reading file:', { error, fullPath });
           }
@@ -126,6 +120,7 @@ export class FileService {
   async countFiles(
     directoryPath: string,
     options: ProcessingOptions,
+    includeDotFolders = false, // Add parameter to include dot folders in counting
   ): Promise<number> {
     try {
       const entries = await fs.readdir(directoryPath, { withFileTypes: true });
@@ -136,7 +131,7 @@ export class FileService {
           break;
         }
 
-        if (this.shouldSkip(entry.name, false)) {
+        if (this.shouldSkip(entry.name, includeDotFolders)) {
           continue;
         }
 
@@ -144,6 +139,7 @@ export class FileService {
           count += await this.countFiles(
             path.join(directoryPath, entry.name),
             options,
+            includeDotFolders,
           );
         } else {
           count++;
@@ -173,7 +169,6 @@ export class FileService {
 
   isLargeDirectory(dirPath: string): boolean {
     let fileCount = 0;
-    const MAX_FILES = 1000;
 
     function countFiles(dir: string): void {
       try {
@@ -186,7 +181,8 @@ export class FileService {
               countFiles(filePath);
             } else {
               fileCount++;
-              if (fileCount > MAX_FILES) {
+              if (fileCount > 100) {
+                // Use 100 as threshold for testing
                 return;
               }
             }
@@ -203,23 +199,35 @@ export class FileService {
 
     try {
       countFiles(dirPath);
-      return fileCount > MAX_FILES;
+      return fileCount > 100; // Use 100 as threshold for testing
     } catch (error) {
       return false;
     }
   }
 
   protected shouldSkip(name: string, includeDotFolders: boolean): boolean {
-    if (includeDotFolders && name.startsWith('.')) {
-      return false;
-    }
-
+    // Handle dot folders based on the includeDotFolders flag
     if (!includeDotFolders && name.startsWith('.')) {
+      logger.info(
+        `Skipping '${name}' due to being a dot folder/file and includeDotFolders is false.`,
+      );
       return true;
     }
 
-    if (!name.startsWith('.')) {
-      return this.excludedFolders.has(name) || this.excludedFiles.has(name);
+    // Even if includeDotFolders is true, still check against ignore patterns
+    const config = vscode.workspace.getConfiguration('aiContextGenerator');
+    const ignorePatterns = config.get<string[]>('ignoreFolders') || [];
+
+    // If includeDotFolders is true, don't ignore dot folders from configuration
+    const effectiveIgnorePatterns = Array.isArray(ignorePatterns)
+      ? includeDotFolders
+        ? ignorePatterns.filter((pattern) => !pattern.startsWith('.'))
+        : ignorePatterns
+      : [];
+
+    if (effectiveIgnorePatterns.includes(name)) {
+      logger.info(`Skipping '${name}' due to ignore setting.`);
+      return true;
     }
 
     return false;

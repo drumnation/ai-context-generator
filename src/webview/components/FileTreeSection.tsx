@@ -1,5 +1,9 @@
 import React, { useCallback } from 'react';
-import { VSCodeButton, VSCodeCheckbox } from '@vscode/webview-ui-toolkit/react';
+import {
+  VSCodeButton,
+  VSCodeCheckbox,
+  VSCodeChangeEvent,
+} from '../components/VSCodeComponents';
 import { useAppContext } from '../contexts/AppContext';
 import { vscode } from '../utils/vscode-api';
 import { useFileTree } from '../hooks/useFileTree';
@@ -39,7 +43,7 @@ const FileTreeSection: React.FC = () => {
         {!isRoot && mode === 'directory' && (
           <VSCodeCheckbox
             style={{ marginLeft: '10px' }}
-            onChange={(e) =>
+            onChange={(e: VSCodeChangeEvent) =>
               handleToggleRoot((e.target as HTMLInputElement).checked)
             }
           >
@@ -57,7 +61,7 @@ const FileTreeSection: React.FC = () => {
             <span className="tree-line">{indent}</span>
             <VSCodeCheckbox
               checked={isChecked}
-              onChange={(e) => {
+              onChange={(e: VSCodeChangeEvent) => {
                 handleFileSelectionChange({
                   ...fileSelections,
                   [content]: (e.target as HTMLInputElement).checked,

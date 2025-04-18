@@ -91,10 +91,28 @@ export enum ProgressLocation {
 
 export const createMockVSCode = () => ({
   window: {
-    withProgress: jest.fn(),
+    withProgress: jest.fn().mockImplementation((options, task) => {
+      const progress = { report: jest.fn() };
+      const token = {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: () => {} }),
+      };
+      return task(progress, token);
+    }),
     createOutputChannel: jest.fn(),
     showInformationMessage: jest.fn(),
     showErrorMessage: jest.fn(),
+    createWebviewPanel: jest.fn().mockReturnValue({
+      webview: {
+        html: '',
+        onDidReceiveMessage: jest.fn(),
+        postMessage: jest.fn().mockResolvedValue(true),
+        asWebviewUri: jest.fn((uri) => uri),
+      },
+      onDidDispose: jest.fn(),
+      reveal: jest.fn(),
+      dispose: jest.fn(),
+    }),
   },
   ProgressLocation,
   ExtensionMode,
@@ -102,7 +120,18 @@ export const createMockVSCode = () => ({
   EnvironmentVariableMutatorType,
   workspace: {
     workspaceFolders: [],
-    getConfiguration: jest.fn(),
+    getConfiguration: jest.fn().mockReturnValue({
+      get: jest.fn(),
+      update: jest.fn(),
+      has: jest.fn(),
+      inspect: jest.fn(),
+    }),
+    fs: {
+      writeFile: jest.fn(),
+      readFile: jest.fn(),
+      delete: jest.fn(),
+      createDirectory: jest.fn(),
+    },
   },
   Uri: {
     file: jest.fn((path: string) => ({
@@ -134,9 +163,15 @@ export const createMockVSCode = () => ({
     onDidChange: jest.fn(),
   })),
   WebviewPanel: jest.fn().mockImplementation(() => ({
-    webview: {},
+    webview: {
+      html: '',
+      onDidReceiveMessage: jest.fn(),
+      postMessage: jest.fn().mockResolvedValue(true),
+      asWebviewUri: jest.fn((uri) => uri),
+    },
     onDidDispose: jest.fn(),
     reveal: jest.fn(),
+    dispose: jest.fn(),
   })),
   EnvironmentVariableCollection: jest.fn().mockImplementation(() => ({
     persistent: false,
@@ -150,6 +185,28 @@ export const createMockVSCode = () => ({
     clear: jest.fn(),
     [Symbol.iterator]: jest.fn(),
     getScoped: jest.fn(),
+  })),
+  CancellationTokenSource: jest.fn().mockImplementation(() => ({
+    token: {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(),
+    },
+    dispose: jest.fn(),
+  })),
+  commands: {
+    registerCommand: jest.fn(),
+    executeCommand: jest.fn(),
+    getCommands: jest
+      .fn()
+      .mockResolvedValue([
+        'ai-pack.generateMarkdown',
+        'ai-pack.generateMarkdownRoot',
+      ]),
+  },
+  EventEmitter: jest.fn().mockImplementation(() => ({
+    event: jest.fn(),
+    fire: jest.fn(),
+    dispose: jest.fn(),
   })),
 });
 

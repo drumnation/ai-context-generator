@@ -39,7 +39,7 @@ interface DirectoryCache {
   includeDotFolders: boolean;
 }
 
-interface FileMetadata {
+export interface FileMetadata {
   mtime: Date;
   size: number;
   hash?: string;

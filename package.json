@@ -2,7 +2,7 @@
   "name": "ai-context-generator",
   "displayName": "AI Context Generator",
   "description": "Generate context summaries for directories and root folders with AI.",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "publisher": "drumnation",
   "icon": "images/icon.png",
   "repository": {
@@ -22,37 +22,55 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:ai-pack.generateMarkdown",
-    "onCommand:ai-pack.generateMarkdownRoot"
+    "onCommand:ai-pack.simpleMarkdown"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ai-pack.generateMarkdown",
-        "title": "Create AI Summary Context for Folder"
-      },
-      {
-        "command": "ai-pack.generateMarkdownRoot",
-        "title": "AI Context Generator: Generate Root Folder Context for AI"
+        "command": "ai-pack.simpleMarkdown",
+        "title": "Create AI Context (Folder)"
       }
     ],
     "menus": {
       "explorer/context": [
         {
           "when": "explorerResourceIsFolder",
-          "command": "ai-pack.generateMarkdown",
+          "command": "ai-pack.simpleMarkdown",
           "group": "navigation"
-        },
-        {
-          "command": "ai-pack.generateMarkdownRoot",
-          "when": "workspaceHasRootFolder"
         }
-      ]
+      ],
+      "configuration": {
+        "title": "AI Context Generator",
+        "properties": {
+          "aiContextGenerator.ignoreFolders": {
+            "type": "array",
+            "default": [
+              ".git",
+              "node_modules",
+              "dist",
+              "build",
+              "out",
+              ".vscode",
+              ".idea",
+              "__pycache__",
+              "*.pyc",
+              "*.pyo",
+              "*.pyd",
+              "*.so",
+              "*.DS_Store"
+            ],
+            "description": "An array of folder names or glob patterns to ignore when generating context.",
+            "items": {
+              "type": "string"
+            },
+            "scope": "resource"
+          }
+        }
+      }
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run package",
     "compile": "webpack",
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
@@ -64,7 +82,7 @@
     "lint": "eslint src --ext ts && eslint src/test src/**/__tests__ --ext ts --config .eslintrc.test.json",
     "test": "jest --config jest.config.js",
     "test:watch": "jest --config jest.config.js --watch",
-    "vsc-package": "pnpm run build && vsce package",
+    "vsc-package": "pnpm run build && sleep 2 && vsce package --no-dependencies",
     "publish": "pnpm run package && vsce publish --pat $VSCPAT",
     "test:e2e": "node ./out/test/runTest.js",
     "pretest:e2e": "pnpm run compile-tests && pnpm run compile"
@@ -73,6 +91,7 @@
     "@nx/eslint": "19.5.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@types/chai": "^4.3.16",
+    "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
     "@types/jest": "^29.5.14",
     "@types/mocha": "^10.0.10",
@@ -115,12 +134,15 @@
   "nx": {},
   "packageManager": "pnpm@8.15.4",
   "dependencies": {
+    "@types/sinon": "^17.0.4",
     "@vscode/codicons": "^0.0.36",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "path-browserify": "^1.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-window": "^1.8.10",
-    "styled-components": "^6.1.12"
+    "sinon": "^20.0.0",
+    "styled-components": "^6.1.12",
+    "tiktoken": "^1.0.20"
   }
 }

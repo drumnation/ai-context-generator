@@ -1,0 +1,303 @@
+---
+description: When writing end to end tests - e2e
+globs: 
+alwaysApply: false
+---
+export const vsCodeE2ETestingWithMochaRuleset = {
+  coreCycleProcess: {
+    description: `
+A structured approach for end-to-end (E2E) testing a VSCode extension using Mocha.
+We break this into distinct phases: Planning, Setup, Execution, and Review.
+Each phase has specific rules, examples, and pitfalls to watch out for.
+`,
+    phases: [
+      {
+        phaseName: "Planning",
+        phaseDescription: "Define the test scope, outline E2E scenarios, and set success criteria.",
+        rules: [
+          "Identify critical end-to-end workflows in the extension (command execution, file manipulation, UI interactions).",
+          "Outline user-focused test cases that simulate real use-cases."
+        ],
+        examples: [
+          {
+            ruleDescription: "Identify end-to-end workflows",
+            codeSample: `// Example plan for testing a file-creation command:
+// 1. Start VSCode and open a test workspace.
+// 2. Run the 'create file' command.
+// 3. Verify the new file is created in the workspace.
+// 4. Confirm any related extension state changes (e.g., user notifications).
+`
+          }
+        ],
+        pitfalls: [
+          "Skipping user-centric scenarios (like interacting with the editor UI).",
+          "Not planning for async operations, timeouts, or race conditions."
+        ]
+      },
+      {
+        phaseName: "Setup",
+        phaseDescription: "Configure Mocha, prepare the VSCode test environment (via vscode-test), and structure test files.",
+        rules: [
+          "Use the official vscode-test library to launch a VSCode instance tailored for E2E tests.",
+          "Enable TypeScript strict mode in tsconfig.json for strong type-checking.",
+          "Mirror the extension’s folder structure for logical test organization."
+        ],
+        examples: [
+          {
+            ruleDescription: "Use vscode-test in Mocha",
+            codeSample: `// package.json
+{
+  "scripts": {
+    "test": "mocha --timeout 10000 --require ts-node/register 'src/test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "mocha": "^10.0.0",
+    "ts-node": "^10.0.0",
+    "@types/mocha": "^10.0.0",
+    "@vscode/test-electron": "^2.2.0"
+  }
+}
+
+// Example test using vscode-test in Mocha
+import * as path from 'path';
+import * as cp from 'child_process';
+import { runTests } from '@vscode/test-electron';
+
+describe('VSCode Extension E2E', () => {
+  it('should start VSCode and run extension tests', async () => {
+    const extensionDevelopmentPath = path.resolve(__dirname, '../../');
+    const extensionTestsPath = path.resolve(__dirname, './suite');
+
+    await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      launchArgs: ['--disable-extensions']
+    });
+  });
+});
+`
+          }
+        ],
+        pitfalls: [
+          "Forgetting to install ts-node or configure Mocha to handle TypeScript files.",
+          "Using too short of a timeout for E2E tests, causing false negatives."
+        ]
+      },
+      {
+        phaseName: "Execution",
+        phaseDescription: "Run E2E tests, capture results, and handle side effects or complex scenarios.",
+        rules: [
+          "Avoid over-mocking: E2E tests should simulate realistic interactions with the extension.",
+          "Use timeouts judiciously; real workflows might need extra wait for UI or file IO operations."
+        ],
+        examples: [
+          {
+            ruleDescription: "E2E test for command execution",
+            codeSample: `import * as vscode from 'vscode';
+import { expect } from 'chai';
+
+describe('CreateFile Command', function() {
+  this.timeout(20000); // E2E tests may need more time
+
+  it('should create a new file in the workspace', async () => {
+    // Activate extension
+    const extension = vscode.extensions.getExtension('myPublisher.myExtension');
+    if (!extension) {
+      throw new Error('Extension not found');
+    }
+    await extension.activate();
+
+    // Execute command
+    await vscode.commands.executeCommand('myExtension.createFile', 'testFile.txt');
+
+    // Verify file creation
+    const files = await vscode.workspace.findFiles('testFile.txt');
+    expect(files.length).to.be.greaterThan(0, 'Expected testFile.txt to be created.');
+  });
+});
+`
+          }
+        ],
+        pitfalls: [
+          "Ignoring race conditions between command execution and file system changes.",
+          "Not cleaning up created files or test data, leaving the workspace in a dirty state for subsequent tests."
+        ]
+      },
+      {
+        phaseName: "Review",
+        phaseDescription: "Analyze E2E coverage, test readability, and maintainability of the suite.",
+        rules: [
+          "Ensure each major user workflow is covered by at least one E2E test.",
+          "Review test logs for slow operations; consider optimizing or splitting lengthy scenarios."
+        ],
+        examples: [
+          {
+            ruleDescription: "Reviewing coverage and suite health",
+            codeSample: `// Mocha doesn't have built-in coverage. Combine with nyc for coverage:
+// package.json
+{
+  "scripts": {
+    "test": "nyc mocha --timeout 10000 --require ts-node/register 'src/test/**/*.test.ts'",
+    "coverage": "nyc report --reporter=text-summary"
+  }
+}
+`
+          }
+        ],
+        pitfalls: [
+          "Focusing on raw coverage numbers instead of meaningful E2E paths.",
+          "Allowing tests to become overly brittle with minor UI or file changes."
+        ]
+      }
+    ]
+  },
+
+  gettingStartedGuide: {
+    description: `
+Basic orientation for developers new to end-to-end testing of VSCode extensions with Mocha.
+Covers initial setup and minimal examples.
+`,
+    steps: [
+      {
+        step: "Install Dependencies",
+        example: "npm install --save-dev mocha ts-node @types/mocha @vscode/test-electron"
+      },
+      {
+        step: "Configure Mocha for TS",
+        example: `// mocha.opts or .mocharc.json snippet
+{
+  "require": [
+    "ts-node/register"
+  ],
+  "timeout": 10000,
+  "ui": "bdd"
+}
+`
+      },
+      {
+        step: "Create an E2E Test",
+        example: `// src/test/e2e/example.test.ts
+import { expect } from 'chai';
+import * as vscode from 'vscode';
+
+describe('Example E2E Test', () => {
+  it('checks extension activation', async () => {
+    const extension = vscode.extensions.getExtension('myPublisher.myExtension');
+    expect(extension).to.not.be.undefined;
+  });
+});
+`
+      }
+    ]
+  },
+
+  bestPractices: {
+    description: `
+Recommended approaches for writing clean, robust E2E tests with Mocha in a VSCode extension.
+`,
+    guidelines: [
+      {
+        name: "Descriptive Test Descriptions",
+        goodExample: `it('opens a new file and verifies content insertion', async () => { /* ... */ });`,
+        badExample: `it('works with file stuff', async () => { /* ... */ });`,
+        explanation: "Descriptive tests help clarify the scenario for both maintainers and future test expansions."
+      },
+      {
+        name: "Test Setup vs. Teardown",
+        goodExample: `// Use hooks to prepare and clean up workspace
+before(async () => { /* create or open test workspace */ });
+after(async () => { /* remove test files, close workspace */ });`,
+        badExample: `// Create or delete test files inline in each test, leading to clutter and potential side-effect issues`,
+        explanation: "Proper setup and teardown keep tests isolated and predictable."
+      },
+      {
+        name: "Minimal External Dependencies",
+        goodExample: `// Rely on only necessary modules and mock services sparingly`,
+        badExample: `// Overuse of global mocks that obscure real E2E behaviors`,
+        explanation: "E2E tests should reflect the actual extension environment as much as possible."
+      }
+    ]
+  },
+
+  domainSpecificPatterns: {
+    description: `
+Patterns tailored for end-to-end testing in VSCode: activation triggers, command palette usage, and file interactions.
+`,
+    specialCases: [
+      {
+        name: "Command Palette Interactions",
+        consideration: "Test how your extension responds when commands are run from the palette (or programmatically).",
+        example: `// Example: Triggering a command as if from the command palette
+await vscode.commands.executeCommand('myExtension.someCommand');
+`
+      },
+      {
+        name: "Workspace and File System",
+        consideration: "Use a disposable test workspace or a dedicated test folder to avoid polluting real user data.",
+        example: `// Example: Opening a temporary workspace folder
+const testWorkspaceUri = vscode.Uri.file('/tmp/myTestWorkspace');
+await vscode.workspace.updateWorkspaceFolders(0, 0, { uri: testWorkspaceUri });
+`
+      }
+    ]
+  },
+
+  warningSigns: {
+    description: `
+Indicators that the E2E test suite or strategy may be problematic. Includes common mistakes and anti-patterns.
+`,
+    redFlags: [
+      "Tests assume an online environment or rely on external network calls without handling offline scenarios.",
+      "Large, monolithic tests that attempt multiple E2E flows in one test, causing confusion and slow runs.",
+      "Ignoring environment differences (e.g., Windows vs. macOS vs. Linux path handling)."
+    ],
+    antiPatterns: [
+      "Hardcoding absolute paths that only work on the test author’s machine.",
+      "Skipping cleanup so subsequent tests start in a corrupted or unclean state."
+    ]
+  },
+
+  improvementGuidelines: {
+    description: `
+Suggestions for growing and refining the E2E test suite, from refactoring to leveraging CI pipelines.
+`,
+    recommendations: [
+      {
+        name: "Iterative Refactoring",
+        method: "Regularly review test logs and console outputs to identify bottlenecks or flaky tests, refactoring them incrementally.",
+        example: `// Example: Breaking down a large test into multiple smaller, focused tests
+// Instead of one giant test that does everything, create specialized tests for:
+// 1. Command registration
+// 2. File creation logic
+// 3. UI notifications
+`
+      },
+      {
+        name: "Continuous Integration",
+        method: "Use GitHub Actions, Azure Pipelines, or similar to run E2E tests on multiple platforms and VSCode versions.",
+        example: `// Example GitHub Actions workflow
+name: "VSCode E2E Tests"
+on:
+  push:
+    branches: [ "main" ]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: npm install
+      - run: npm run test
+`
+      }
+    ],
+    evolutionExample: `
+Start with a single, simple E2E test to validate extension activation.
+Gradually expand to cover commands, configuration, and error states.
+Finally, automate these tests in a CI/CD pipeline to guarantee cross-platform stability.
+`
+  }
+};

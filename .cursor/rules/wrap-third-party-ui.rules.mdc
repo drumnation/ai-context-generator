@@ -1,0 +1,37 @@
+---
+description: The user or the agent is implementing a UI component using a third-party design system     (e.g., Mantine, Radix, MUI, ShadCN), and the component is being introduced into the     codebase. This rule ensures the component is wrapped in a local atomic wrapper before use.
+globs: 
+alwaysApply: false
+---
+# Rule: Wrap Third-Party UI Components
+
+## Purpose:
+Ensure consistent, flexible, and maintainable usage of third-party UI libraries by always wrapping them in local components that follow atomic design principles.
+
+---
+
+## Best Practices:
+
+- **Wrap All External Components**  
+  Always wrap UI components from design systems (e.g., `shadcn/ui`, `MUI`, `Radix`) in your own components, even if you don’t modify them initially.
+
+- **Atomic Design Structure**  
+  Place wrappers in appropriate atomic layer:  
+  - Atoms → Buttons, Inputs, Avatars  
+  - Molecules → Cards, Selects  
+  - Organisms → Modals, Tables, Layouts
+
+- **Benefits:**
+  - Centralize **refactors** — replace or update libraries in one place
+  - Easily **extend** functionality (e.g. behaviors, props, styling)
+  - Normalize usage and reduce coupling to library-specific APIs
+  - Future-proof against **breaking changes** in upstream libraries
+
+- **Naming Convention:**  
+  Use clear internal names (e.g., `BaseButton`, `AppInput`) and export only wrapped versions from your design system.
+
+---
+
+## Enforcement:
+- This rule applies to all frontend layers in `components/`, `ui/`, or `shared/`.
+- Only wrapped components should be used in features, pages, or other components.

@@ -19,6 +19,7 @@ type Action =
   | { type: 'FILE_SELECTION_CHANGE'; payload: { [key: string]: boolean } };
 
 function reducer(state: AppState, action: Action): AppState {
+  logger.info('>>> useAppState reducer: Action dispatched:', action);
   switch (action.type) {
     case 'SET_FILE_TREE':
       logger.info('Updating file tree', {
@@ -33,10 +34,14 @@ function reducer(state: AppState, action: Action): AppState {
       });
       return { ...state, combinedContent: action.payload };
     case 'SET_ERROR':
-      logger.info(`Setting error state to ${action.payload}`);
+      logger.info(
+        `useAppState reducer: Setting error state to ${action.payload}`,
+      );
       return { ...state, error: action.payload };
     case 'SET_LOADING':
-      logger.info(`Setting loading state to ${action.payload}`);
+      logger.info(
+        `useAppState reducer: Setting loading state to ${action.payload}`,
+      );
       return { ...state, loading: action.payload };
     case 'SET_FILE_SELECTIONS':
       logger.info('Updating file selections');
@@ -54,7 +59,9 @@ function reducer(state: AppState, action: Action): AppState {
       logger.info(`Setting isLargeRepo to ${action.payload}`);
       return { ...state, isLargeRepo: action.payload };
     case 'CHANGE_MODE':
-      logger.info(`Mode changed to ${action.payload}`);
+      logger.info(
+        `useAppState reducer: Mode change requested to ${action.payload}`,
+      );
       return {
         ...state,
         mode: action.payload,
@@ -80,6 +87,7 @@ function reducer(state: AppState, action: Action): AppState {
         allFilesChecked: allChecked,
       };
     default:
+      logger.warn('useAppState reducer: Unknown action type', action);
       return state;
   }
 }
@@ -111,10 +119,10 @@ export function useAppState() {
     (error: boolean) => dispatch({ type: 'SET_ERROR', payload: error }),
     [],
   );
-  const setLoading = useCallback(
-    (loading: boolean) => dispatch({ type: 'SET_LOADING', payload: loading }),
-    [],
-  );
+  const setLoading = useCallback((loading: boolean) => {
+    logger.info(`useAppState: Explicitly setting loading to ${loading}`);
+    dispatch({ type: 'SET_LOADING', payload: loading });
+  }, []);
   const setFileSelections = useCallback(
     (selections: { [key: string]: boolean }) =>
       dispatch({ type: 'SET_FILE_SELECTIONS', payload: selections }),
@@ -141,10 +149,16 @@ export function useAppState() {
   );
 
   const handleModeChange = useCallback((newMode: 'directory' | 'root') => {
+    logger.info(`useAppState handleModeChange: Changing mode to ${newMode}`);
     dispatch({ type: 'CHANGE_MODE', payload: newMode });
-    vscode.postMessage({
-      command: newMode === 'root' ? 'loadRootMode' : 'loadDirectoryMode',
-    });
+    if (newMode === 'root') {
+      logger.info(
+        `useAppState handleModeChange: Posting loadRootMode to backend`,
+      );
+      vscode.postMessage({
+        command: 'loadRootMode',
+      });
+    }
   }, []);
 
   const handleToggleFiles = useCallback((checked: boolean) => {

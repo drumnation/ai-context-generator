@@ -5,10 +5,17 @@ node_modules/**
 src/**
 .gitignore
 .yarnrc
-esbuild.js
-vsc-extension-quickstart.md
+.pnp.*
+webpack.config.js
+src/test/
+src/**/__tests__
+coverage/
+*.log
+.eslintrc.test.json
+
 **/tsconfig.json
 **/.eslintrc.json
 **/*.map
-**/*.ts
-**/.vscode-test.*
+
+# Include build output
+!dist/**
